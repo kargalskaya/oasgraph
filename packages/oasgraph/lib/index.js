@@ -257,7 +257,7 @@ function translateOpenApiToGraphQL(oass, { strict, headers, qs, viewer, tokenJSO
  * Creates the field object for the given operation.
  */
 function getFieldForOperation(operation, baseUrl, data, oass) {
-    let type = operation.graphQLType;
+    let type = operation.responseDefinition.ot;
     // create resolve function:
     let payloadSchemaName = operation.payloadDefinition
         ? operation.payloadDefinition.iotName

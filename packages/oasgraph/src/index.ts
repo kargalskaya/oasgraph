@@ -344,7 +344,7 @@ function getFieldForOperation (
   data: PreprocessingData,
   oass: Oas3[],
 ): Field {
-  let type: GraphQLType = operation.graphQLType
+  let type: GraphQLType = operation.responseDefinition.ot
 
   // create resolve function:
   let payloadSchemaName = operation.payloadDefinition
