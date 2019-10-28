@@ -1,10 +1,10 @@
-// Copyright IBM Corp. 2018. All Rights Reserved.
-// Node module: openapi-to-graphql
-// This file is licensed under the MIT License.
-// License text available at https://opensource.org/licenses/MIT
+// Copyright IBM Corp. 2018. All Rights Reserved.
+// Node module: openapi-to-graphql
+// This file is licensed under the MIT License.
+// License text available at https://opensource.org/licenses/MIT
 
-// Type imports:
-import { Oas3, SchemaObject, LinkObject } from './types/oas3'
+// Type imports:
+import { Oas3, SchemaObject, LinkObject, ReferenceObject } from './types/oas3'
 import { InternalOptions } from './types/options'
 import { Operation, DataDefinition } from './types/operation'
 import {
@@ -12,7 +12,7 @@ import {
   ProcessedSecurityScheme
 } from './types/preprocessing_data'
 
-// Imports:
+// Imports:
 import * as Oas3Tools from './oas_3_tools'
 import * as deepEqual from 'deep-equal'
 import debug from 'debug'
@@ -21,8 +21,8 @@ import { handleWarning, getCommonPropertyNames } from './utils'
 const preprocessingLog = debug('preprocessing')
 
 /**
- * Extract information from the OAS and put it inside a data structure that
- * is easier for OpenAPI-to-GraphQL to use
+ * Extract information from the OAS and put it inside a data structure that
+ * is easier for OpenAPI-to-GraphQL to use
  */
 export function preprocessOas(
   oass: Oas3[],
@@ -30,8 +30,8 @@ export function preprocessOas(
 ): PreprocessingData {
   const data: PreprocessingData = {
     usedOTNames: [
-      'Query', // Used by OpenAPI-to-GraphQL for root-level element
-      'Mutation' // Used by OpenAPI-to-GraphQL for root-level element
+      'Query', // Used by OpenAPI-to-GraphQL for root-level element
+      'Mutation' // Used by OpenAPI-to-GraphQL for root-level element
     ],
     defs: [],
     operations: {},
@@ -42,12 +42,11 @@ export function preprocessOas(
   }
 
   oass.forEach(oas => {
-    // Store stats on OAS:
+    // Store stats on OAS:
     data.options.report.numOps += Oas3Tools.countOperations(oas)
     data.options.report.numOpsMutation += Oas3Tools.countOperationsMutation(oas)
-    data.options.report.numOpsQuery += Oas3Tools.countOperationsQuery(oas)
+    data.options.report.numOpsQuery += Oas3Tools.countOperationsQuery(oas) // Get security schemes
 
-    // Get security schemes
     const currentSecurity = getProcessedSecuritySchemes(oas, data)
     const commonSecurityPropertyName = getCommonPropertyNames(
       data.security,
@@ -56,21 +55,19 @@ export function preprocessOas(
     commonSecurityPropertyName.forEach(propertyName => {
       handleWarning({
         typeKey: 'DUPLICATE_SECURITY_SCHEME',
-        message: `Multiple OASs share security schemes with the same name '${propertyName}'`,
+        message: `Multiple OASs share security schemes with the same name '${propertyName}'`,
         mitigationAddendum:
-          `The security scheme from OAS ` +
-          `'${currentSecurity[propertyName].oas.info.title}' will be ignored`,
+          `The security scheme from OAS ` +
+          `'${currentSecurity[propertyName].oas.info.title}' will be ignored`,
         data,
         log: preprocessingLog
       })
-    })
-    // Do not overwrite preexisting security schemes
-    data.security = { ...currentSecurity, ...data.security }
+    }) // Do not overwrite preexisting security schemes
+    data.security = { ...currentSecurity, ...data.security } // Process all operations
 
-    // Process all operations
     for (let path in oas.paths) {
       for (let method in oas.paths[path]) {
-        //  Only consider Operation Objects
+        //  Only consider Operation Objects
         if (!Oas3Tools.isOperation(method)) {
           continue
         }
@@ -79,9 +76,8 @@ export function preprocessOas(
         const operationString =
           oass.length === 1
             ? Oas3Tools.formatOperationString(method, path)
-            : Oas3Tools.formatOperationString(method, path, oas.info.title)
+            : Oas3Tools.formatOperationString(method, path, oas.info.title) // Determine description
 
-        // Determine description
         let description = endpoint.description
         if (
           (typeof description !== 'string' || description === '') &&
@@ -91,20 +87,18 @@ export function preprocessOas(
         }
 
         if (typeof description !== 'string') {
-          description = 'No description available.'
+          description = 'No description available.'
         }
 
         if (data.options.equivalentToMessages) {
-          description += `\n\nEquivalent to ${operationString}`
-        }
+          description += `\n\nEquivalent to ${operationString}`
+        } // Hold on to the operationId
 
-        // Hold on to the operationId
         const operationId =
           typeof endpoint.operationId !== 'undefined'
             ? endpoint.operationId
-            : Oas3Tools.generateOperationId(method, path)
+            : Oas3Tools.generateOperationId(method, path) // Request schema
 
-        // Request schema
         const {
           payloadContentType,
           payloadSchema,
@@ -122,9 +116,8 @@ export function preprocessOas(
                 undefined,
                 oas
               )
-            : undefined
+            : undefined // Response schema
 
-        // Response schema
         const {
           responseContentType,
           responseSchema,
@@ -142,16 +135,15 @@ export function preprocessOas(
           handleWarning({
             typeKey: 'MISSING_RESPONSE_SCHEMA',
             message:
-              `Operation ${operationString} has no (valid) response schema. ` +
-              `You can use the fillEmptyResponses option to create a ` +
-              `placeholder schema`,
+              `Operation ${operationString} has no (valid) response schema. ` +
+              `You can use the fillEmptyResponses option to create a ` +
+              `placeholder schema`,
             data,
             log: preprocessingLog
           })
           continue
-        }
+        } // Links
 
-        // Links
         const links = Oas3Tools.getEndpointLinks(path, method, oas, data)
 
         const responseDefinition = createDataDef(
@@ -161,26 +153,21 @@ export function preprocessOas(
           data,
           links,
           oas
-        )
+        ) // Parameters
 
-        // Parameters
-        const parameters = Oas3Tools.getParameters(path, method, oas)
+        const parameters = Oas3Tools.getParameters(path, method, oas) // Security protocols
 
-        // Security protocols
         const securityRequirements = options.viewer
           ? Oas3Tools.getSecurityRequirements(path, method, data.security, oas)
-          : []
+          : [] // Servers
 
-        // Servers
-        const servers = Oas3Tools.getServers(path, method, oas)
+        const servers = Oas3Tools.getServers(path, method, oas) // Whether to place this operation into an authentication viewer
 
-        // Whether to place this operation into an authentication viewer
         const inViewer =
           securityRequirements.length > 0 && data.options.viewer !== false
 
-        const isMutation = method.toLowerCase() !== 'get'
+        const isMutation = method.toLowerCase() !== 'get' // Store determined information for operation
 
-        // Store determined information for operation
         const operation: Operation = {
           operationId,
           operationString,
@@ -199,15 +186,13 @@ export function preprocessOas(
           isMutation,
           statusCode,
           oas
-        }
+        } // Handle operationId property name collision // May occur if multiple OAS are provided
 
-        // Handle operationId property name collision
-        // May occur if multiple OAS are provided
         if (operationId in data.operations) {
           handleWarning({
             typeKey: 'DUPLICATE_OPERATIONID',
-            message: `Multiple OASs share operations with the same operationId '${operationId}'`,
-            mitigationAddendum: `The operation from the OAS '${operation.oas.info.title}' will be ignored`,
+            message: `Multiple OASs share operations with the same operationId '${operationId}'`,
+            mitigationAddendum: `The operation from the OAS '${operation.oas.info.title}' will be ignored`,
             data,
             log: preprocessingLog
           })
@@ -222,63 +207,61 @@ export function preprocessOas(
 }
 
 /**
- * Extracts the security schemes from given OAS and organizes the information in
- * a data structure that is easier for OpenAPI-to-GraphQL to use
+ * Extracts the security schemes from given OAS and organizes the information in
+ * a data structure that is easier for OpenAPI-to-GraphQL to use
  *
- * Here is the structure of the data:
- * {
- *   {string} [sanitized name] { Contains information about the security protocol
- *     {string} rawName           Stores the raw security protocol name
- *     {object} def               Definition provided by OAS
- *     {object} parameters        Stores the names of the authentication credentials
- *                                  NOTE: Structure will depend on the type of the protocol
- *                                    (e.g. basic authentication, API key, etc.)
- *                                  NOTE: Mainly used for the AnyAuth viewers
- *     {object} schema            Stores the GraphQL schema to create the viewers
- *   }
- * }
+ * Here is the structure of the data:
+ * {
+ *   {string} [sanitized name] { Contains information about the security protocol
+ *     {string} rawName           Stores the raw security protocol name
+ *     {object} def               Definition provided by OAS
+ *     {object} parameters        Stores the names of the authentication credentials
+ *                                  NOTE: Structure will depend on the type of the protocol
+ *                                    (e.g. basic authentication, API key, etc.)
+ *                                  NOTE: Mainly used for the AnyAuth viewers
+ *     {object} schema            Stores the GraphQL schema to create the viewers
+ *   }
+ * }
  *
- * Here is an example:
- * {
- *   MyApiKey: {
- *     rawName: "My_api_key",
- *     def: { ... },
- *     parameters: {
- *       apiKey: MyKeyApiKey
- *     },
- *     schema: { ... }
- *   }
- *   MyBasicAuth: {
- *     rawName: "My_basic_auth",
- *     def: { ... },
- *     parameters: {
- *       username: MyBasicAuthUsername,
- *       password: MyBasicAuthPassword,
- *     },
- *     schema: { ... }
- *   }
- * }
+ * Here is an example:
+ * {
+ *   MyApiKey: {
+ *     rawName: "My_api_key",
+ *     def: { ... },
+ *     parameters: {
+ *       apiKey: MyKeyApiKey
+ *     },
+ *     schema: { ... }
+ *   }
+ *   MyBasicAuth: {
+ *     rawName: "My_basic_auth",
+ *     def: { ... },
+ *     parameters: {
+ *       username: MyBasicAuthUsername,
+ *       password: MyBasicAuthPassword,
+ *     },
+ *     schema: { ... }
+ *   }
+ * }
  */
 function getProcessedSecuritySchemes(
   oas: Oas3,
   data: PreprocessingData
 ): { [key: string]: ProcessedSecurityScheme } {
   const result = {}
-  const security = Oas3Tools.getSecuritySchemes(oas)
+  const security = Oas3Tools.getSecuritySchemes(oas) // Loop through all the security protocols
 
-  // Loop through all the security protocols
   for (let key in security) {
     const protocol = security[key]
 
-    let schema
-    // Determine the parameters and the schema for the security protocol
+    let schema // Determine the parameters and the schema for the security protocol
     let parameters = {}
     let description
     switch (protocol.type) {
       case 'apiKey':
-        description = `API key credentials for the security protocol '${key}'`
+        description = `API key credentials for the security protocol '${key}'`
         if (data.oass.length > 1) {
-          description += ` in ${oas.info.title}`
+          description += ` in ${oas.info.title}`
         }
 
         parameters = {
@@ -297,14 +280,16 @@ function getProcessedSecuritySchemes(
         break
 
       case 'http':
-        switch (protocol.scheme) {
+        switch (
+          protocol.scheme
           /**
-           * TODO: HTTP has a number of authentication types
+           * TODO: HTTP has a number of authentication types
            *
-           * See http://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml
+           * See http://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml
            */
+        ) {
           case 'basic':
-            description = `Basic auth credentials for security protocol '${key}'`
+            description = `Basic auth credentials for security protocol '${key}'`
 
             parameters = {
               username: Oas3Tools.sanitize(`${key}_username`),
@@ -329,22 +314,21 @@ function getProcessedSecuritySchemes(
             handleWarning({
               typeKey: 'UNSUPPORTED_HTTP_SECURITY_SCHEME',
               message:
-                `Currently unsupported HTTP authentication protocol ` +
-                `type 'http' and scheme '${protocol.scheme}' in OAS ` +
+                `Currently unsupported HTTP authentication protocol ` +
+                `type 'http' and scheme '${protocol.scheme}' in OAS ` +
                 `'${oas.info.title}'`,
               data,
               log: preprocessingLog
             })
         }
-        break
+        break // TODO: Implement
 
-      // TODO: Implement
       case 'openIdConnect':
         handleWarning({
           typeKey: 'UNSUPPORTED_HTTP_SECURITY_SCHEME',
           message:
-            `Currently unsupported HTTP authentication protocol ` +
-            `type 'openIdConnect' in OAS '${oas.info.title}'`,
+            `Currently unsupported HTTP authentication protocol ` +
+            `type 'openIdConnect' in OAS '${oas.info.title}'`,
           data,
           log: preprocessingLog
         })
@@ -354,27 +338,25 @@ function getProcessedSecuritySchemes(
         handleWarning({
           typeKey: 'OAUTH_SECURITY_SCHEME',
           message:
-            `OAuth security scheme found in OAS '${oas.info.title}'. ` +
-            `OAuth support is provided using the 'tokenJSONpath' option`,
+            `OAuth security scheme found in OAS '${oas.info.title}'. ` +
+            `OAuth support is provided using the 'tokenJSONpath' option`,
           data,
           log: preprocessingLog
-        })
+        }) // Continue because we do not want to create an oauth viewer
 
-        // Continue because we do not want to create an oauth viewer
         continue
 
       default:
         handleWarning({
           typeKey: 'UNSUPPORTED_HTTP_SECURITY_SCHEME',
           message:
-            `Unsupported HTTP authentication protocol` +
-            `type '${protocol.type}' in OAS '${oas.info.title}'`,
+            `Unsupported HTTP authentication protocol` +
+            `type '${protocol.type}' in OAS '${oas.info.title}'`,
           data,
           log: preprocessingLog
         })
-    }
+    } // Add protocol data to the output
 
-    // Add protocol data to the output
     result[key] = {
       rawName: key,
       def: protocol,
@@ -387,14 +369,14 @@ function getProcessedSecuritySchemes(
 }
 
 /**
- * Method to either create a new or reuse an existing, centrally stored data
- * definition. Data definitions are objects that hold a schema (= JSON schema),
- * an otName (= String to use as the name for object types), and an iotName
- * (= String to use as the name for input object types). Eventually, data
- * definitions also hold an ot (= the object type for the schema) and an iot
- * (= the input object type for the schema).
+ * Method to either create a new or reuse an existing, centrally stored data
+ * definition. Data definitions are objects that hold a schema (= JSON schema),
+ * an otName (= String to use as the name for object types), and an iotName
+ * (= String to use as the name for input object types). Eventually, data
+ * definitions also hold an ot (= the object type for the schema) and an iot
+ * (= the input object type for the schema).
  *
- * Either names or preferredName should exist.
+ * Either names or preferredName should exist.
  */
 export function createDataDef(
   names: Oas3Tools.SchemaNames,
@@ -404,10 +386,10 @@ export function createDataDef(
   links?: { [key: string]: LinkObject },
   oas?: Oas3
 ): DataDefinition {
-  // Do a basic validation check
+  // Do a basic validation check
   if (!schema || typeof schema === 'undefined') {
     throw new Error(
-      `Cannot create data definition for invalid schema ` +
+      `Cannot create data definition for invalid schema ` +
         `'${JSON.stringify(schema)}'`
     )
   }
@@ -423,21 +405,20 @@ export function createDataDef(
     Object.keys(links).forEach(linkKey => {
       saneLinks[Oas3Tools.sanitize(linkKey)] = links[linkKey]
     })
-  }
+  } // Determine the index of possible existing data definition
 
-  // Determine the index of possible existing data definition
   const index = getSchemaIndex(preferredName, schema, data.defs)
   if (index !== -1) {
-    // Found existing data definition. Fetch it
+    // Found existing data definition. Fetch it
     const existingDataDef = data.defs[index]
-
     /**
-     * Collapse links if possible, i.e. if the current operation has links,
-     * combine them with the prexisting ones
+     * Collapse links if possible, i.e. if the current operation has links,
+     * combine them with the prexisting ones
      */
+
     if (typeof saneLinks !== 'undefined') {
       if (typeof existingDataDef.links !== 'undefined') {
-        // Check if there are any overlapping links
+        // Check if there are any overlapping links
         Object.keys(existingDataDef.links).forEach(saneLinkKey => {
           if (
             typeof saneLinks[saneLinkKey] !== 'undefined' &&
@@ -449,81 +430,187 @@ export function createDataDef(
             handleWarning({
               typeKey: 'DUPLICATE_LINK_KEY',
               message:
-                `Multiple operations with the same response body share the same sanitized ` +
-                `link key '${saneLinkKey}' but have different link definitions ` +
-                `'${JSON.stringify(existingDataDef.links[saneLinkKey])}' and ` +
+                `Multiple operations with the same response body share the same sanitized ` +
+                `link key '${saneLinkKey}' but have different link definitions ` +
+                `'${JSON.stringify(existingDataDef.links[saneLinkKey])}' and ` +
                 `'${JSON.stringify(saneLinks[saneLinkKey])}'.`,
               data,
               log: preprocessingLog
             })
           }
         })
-
         /**
-         * Collapse the links
+         * Collapse the links
          *
-         * Avoid overwriting preexisting links
+         * Avoid overwriting preexisting links
          */
+
         existingDataDef.links = { ...saneLinks, ...existingDataDef.links }
       } else {
-        // No preexisting links, so simply assign the links
+        // No preexisting links, so simply assign the links
         existingDataDef.links = saneLinks
       }
     }
 
     return existingDataDef
   } else {
-    // Else, define a new name, store the def, and return it
-    const name = getSchemaName(data.usedOTNames, names)
+    // Else, define a new name, store the def, and return it
+    const name = getSchemaName(data.usedOTNames, names) // Store and sanitize the name
 
-    // Store and sanitize the name
     const saneName = Oas3Tools.capitalize(
       Oas3Tools.sanitizeAndStore(name, data.saneMap)
     )
-    const saneInputName = Oas3Tools.capitalize(saneName + 'Input')
+    const saneInputName = Oas3Tools.capitalize(saneName + 'Input') // Determine the type of the schema
 
-    // Determine the type of the schema
     const targetGraphQLType = Oas3Tools.getSchemaTargetGraphQLType(
       schema as SchemaObject,
       data
-    )
+    ) // Add the names to the master list
+
+    data.usedOTNames.push(saneName)
+    data.usedOTNames.push(saneInputName)
+
+    const def: DataDefinition = {
+      preferredName
+      /**
+       * Note that schema may contain $ref or schema composition (e.g. allOf)
+       *
+       * TODO: the schema is used in getSchemaIndex, which allows us to check
+       * whether a dataDef has already been created for that particular
+       * schema and name pair. The look up should resolve references but
+       * currently, it does not.
+       */,
+
+      schema,
+
+      required: [],
+
+      targetGraphQLType,
+      subDefinitions: undefined,
+      links: saneLinks,
+      otName: saneName,
+      iotName: saneInputName
+    } // Add the def to the master list
+
+    data.defs.push(def)
+
+    if (Array.isArray(schema.anyOf) && Array.isArray(schema.oneOf)) {
+      // TODO: warning currently do not support both anyOf and oneOf
+      def.targetGraphQLType = 'json'
+      return def
+    }
+
+    const allOfConsolidated = Array.isArray(schema.allOf)
+      ? consolidateSubSchemas(schema.allOf, oas, data, 0)
+      : null // const anyOfConsolidated = Array.isArray(schema.anyOf) //   ? consolidateSubSchemas(schema.anyOf, oas, data, 0) //   : null
+    const oneOfConsolidated = Array.isArray(schema.oneOf)
+      ? consolidateSubSchemas(schema.oneOf, oas, data, 0)
+      : null // // Contains minimum the raw schema and everything in allOf, mandatory fields // const consolidatedSchema = JSON.parse(JSON.stringify(schema)) // Copy schema // // Add allOf to the consolidatedSchema // if (allOfConsolidated) { //   const allOfConsolidatedType = consolidateTypes(allOfConsolidated.consolidatedTargetGraphQLTypes, targetGraphQLType) //   if (allOfConsolidatedType !== targetGraphQLType) { // TODO: enum //     // TODO: warning //     def.targetGraphQLType = 'json' //     return def //   } //   if (allOfConsolidatedType === 'object') { //     allOfConsolidated.consolidatedProperties.forEach((properties) => { //       Object.entries(properties).forEach(([propertyName, property]) => { //         if (propertyName in consolidatedSchema) { //           if (!deepEqual(property, consolidatedSchema[propertyName])) { // TODO: deepEquals will not resolve references //             // TODO: warning: allOf is not compatible with the parent schema or itself //             def.targetGraphQLType = 'json' //             return def //           } //         } else { //           console.log(property) //           consolidatedSchema[propertyName] = property //         } //       }) //     }) //   } //   allOfConsolidated.consolidatedRequired.forEach((requiredPropertyName) => { //     if (Array.isArray(consolidatedSchema.required) && !consolidatedSchema.required.includes(requiredPropertyName)) { //       consolidatedSchema.required.concat(requiredPropertyName) //     } //   }) // }
+
+    const consolidatedSchema = collapseAllOf(schema, {}, oas) // console.log('final',consolidatedSchema) // if (schema.allOf) { //   console.log(targetGraphQLType) //   console.log(schema) //   console.log(consolidatedSchema) //   console.log() // } // if (schema.allOf) { //   console.log(targetGraphQLType) //   console.log(schema) //   console.log(consolidatedSchema) //   console.log() // }
+    if (oneOfConsolidated) {
+      //       Create union
+      if (oneOfConsolidated.consolidatedProperties.length > 0) {
+        if (
+          oneOfConsolidated.consolidatedTargetGraphQLTypes.some(
+            memberTargetGraphQLTypes => {
+              return memberTargetGraphQLTypes === 'object'
+            }
+          )
+        ) {
+          /**
+           * At this point, we know that oneOf contains member schemas that are
+           * object types. We want to create a GraphQL union using these types.
+           */
+
+          /**
+           * Ensure that schema is compatiable with oneOf
+           */
+          if (
+            (targetGraphQLType === null || targetGraphQLType === 'object') && // From the parent schema
+            (allOfConsolidated === null ||
+              (allOfConsolidated.consolidatedTargetGraphQLTypes.length === 0 ||
+                allOfConsolidated.consolidatedTargetGraphQLTypes.every(
+                  memberTargetGraphQLType => {
+                    return (
+                      memberTargetGraphQLType === null ||
+                      memberTargetGraphQLType === 'object'
+                    )
+                  }
+                )))
+          ) {
+            def.subDefinitions = []
+
+            schema.oneOf.forEach(subSchema => {
+              //             Dereference subSchema
+              let fromRef: string
+              if ('$ref' in subSchema) {
+                fromRef = subSchema['$ref'].split('/').pop()
+                subSchema = Oas3Tools.resolveRef(
+                  subSchema['$ref'],
+                  oas
+                ) as SchemaObject
+              }
+
+              //             TODO: properties should be handled like interfaces, which also means they need to be passed into the subschemas
+
+              //             TODO: ensure that unions are not composed of other unions
+              //             Member types of GraphQL unions must be object base types
+              if (subSchema.type === 'object') {
+                const subDefinition = createDataDef(
+                  {
+                    fromRef,
+                    fromSchema: subSchema.title,
+                    fromPath: `${saneName}Member`
+                  },
+                  subSchema,
+                  isInputObjectType,
+                  data,
+                  undefined,
+                  oas
+                )
+                ;(def.subDefinitions as DataDefinition[]).push(subDefinition)
+              } else {
+                //               TODO: mitigation default JSON type
+
+                handleWarning({
+                  typeKey: 'UNION_MEMBER_NON_OBJECT',
+                  message:
+                    `Union member type '${JSON.stringify(subSchema)}' in ` +
+                    `union type '${JSON.stringify(schema)}' is not an object ` +
+                    `type. Union member types must be object base types.`,
+                  data,
+                  log: preprocessingLog
+                })
+              }
+            })
+
+            //           Add the def to the master list
+            data.defs.push(def)
+            def.targetGraphQLType = 'union'
+            return def
+          } else {
+            //           TODO: warning mismatching types between parent schema/allOf and oneOf member schemas
+
+            //           TODO: mitigatiom default JSON type
+            def.targetGraphQLType = 'json'
+            return def
+          }
+        }
+      } else {
+        //         TODO: cannot create union of different scalar types, default JSON type
+        def.targetGraphQLType = 'json'
+        return def
+      }
+    } // if (anyOfConsolidated) { //   // Every member type should be an object //   if (anyOfConsolidated.consolidatedTargetGraphQLTypes.length > 0 && //     anyOfConsolidated.consolidatedTargetGraphQLTypes.every((memberTargetGraphQLTypes) => { //       return memberTargetGraphQLTypes === 'object' //     }) && //     anyOfConsolidated.consolidatedProperties.length > 0 //   ) { //     const incompatibleProperties = new Set<string>() //     anyOfConsolidated.consolidatedProperties.forEach((properties) => { //       Object.keys(properties).forEach((propertyName) => { //         if ( //           !incompatibleProperties.has(propertyName) && // No preexisting conflicts //           propertyName in consolidatedSchema && // Property already exists in the consolidated schema //           !deepEqual(properties[propertyName], consolidatedSchema[propertyName]) // Property conflicts with that in the consolidated schema //         ) { //           incompatibleProperties.add(propertyName) //           consolidatedSchema[propertyName] = undefined // Do not create these properties. Will add them in later. //         } //       }) //     }) //     def.subDefinitions = {} //     addObjectPropertiesToDataDef( //       def, //       consolidatedSchema, //       def.required, //       isInputObjectType, //       data, //       oas //     ) //     // Add in incompatible properties //     incompatibleProperties.forEach((propertyName) => { //       // TODO: incompatible property //       // TODO: add description //       def.subDefinitions[propertyName] = { //         targetGraphQLType: 'json' //       } //     }) //     return def //   } else { //     // TODO: warning different types //     def.targetGraphQLType = 'json' //     return def //   } // }
 
     if (targetGraphQLType) {
-      // Add the names to the master list
-      data.usedOTNames.push(saneName)
-      data.usedOTNames.push(saneInputName)
-
-      const def: DataDefinition = {
-        preferredName,
-
-        /**
-         * Note that schema may contain $ref or schema composition (e.g. allOf)
-         *
-         * TODO: the schema is used in getSchemaIndex, which allows us to check
-         * whether a dataDef has already been created for that particular
-         * schema and name pair. The look up should resolve references but
-         * currently, it does not.
-         */
-        schema,
-
-        required: [],
-
-        targetGraphQLType,
-        subDefinitions: undefined,
-        links: saneLinks,
-        otName: saneName,
-        iotName: saneInputName
-      }
-
-      // Add the def to the master list
-      data.defs.push(def)
-
       switch (targetGraphQLType) {
         case 'array':
           if (typeof schema.items === 'object') {
-            // Break schema down into component parts
-            // I.e. if it is an list type, create a reference to the list item type
-            // Or if it is an object type, create references to all of the field types
+            // Break schema down into component parts
+            // I.e. if it is an list type, create a reference to the list item type
+            // Or if it is an object type, create references to all of the field types
             let itemsSchema = schema.items
             let itemsName = `${name}ListItem`
 
@@ -532,16 +619,15 @@ export function createDataDef(
             }
 
             const subDefinition = createDataDef(
-              // Is this the correct classification for this name? It does not matter in the long run.
+              // Is this the correct classification for this name? It does not matter in the long run.
               { fromRef: itemsName },
               itemsSchema as SchemaObject,
               isInputObjectType,
               data,
               undefined,
               oas
-            )
+            ) // Add list item reference
 
-            // Add list item reference
             def.subDefinitions = subDefinition
           }
           break
@@ -558,95 +644,114 @@ export function createDataDef(
             oas
           )
           break
-
-        case 'combination':
-          // TODO: Currently assuming that this is an object type
-          if (
-            schema.type === 'object' ||
-            typeof schema.properties === 'object'
-          ) {
-            def.subDefinitions = {}
-
-            addAllOfToDataDef(
-              def,
-              schema,
-              def.required,
-              isInputObjectType,
-              data,
-              oas
-            )
-
-            // Add existing properties (regular object type)
-            addObjectPropertiesToDataDef(
-              def,
-              schema,
-              def.required,
-              isInputObjectType,
-              data,
-              oas
-            )
-          }
-          break
-
-        case 'union':
-          def.subDefinitions = []
-
-          schema.oneOf.forEach(subSchema => {
-            // Dereference subSchema
-            let fromRef: string
-            if ('$ref' in subSchema) {
-              fromRef = subSchema['$ref'].split('/').pop()
-              subSchema = Oas3Tools.resolveRef(subSchema['$ref'], oas)
-            }
-
-            // TODO: properties should be handled like interfaces, which also means they need to be passed into the subschemas
-
-            // TODO: ensure that unions are not composed of other unions
-            // Member types of GraphQL unions must be object base types
-            if (subSchema.type === 'object') {
-              const subDefinition = createDataDef(
-                {
-                  fromRef,
-                  fromSchema: subSchema.title,
-                  fromPath: `${saneName}Member`
-                },
-                subSchema as SchemaObject,
-                isInputObjectType,
-                data,
-                undefined,
-                oas
-              )
-              ;(def.subDefinitions as DataDefinition[]).push(subDefinition)
-            } else {
-              handleWarning({
-                typeKey: 'UNION_MEMBER_NON_OBJECT',
-                message:
-                  `Union member type '${JSON.stringify(subSchema)}' in ` +
-                  `union type '${JSON.stringify(schema)}' is not an object ` +
-                  `type. Union member types must be object base types.`,
-                data,
-                log: preprocessingLog
-              })
-            }
-          })
-          break
       }
-
-      return def
     } else {
-      throw new Error(
-        `Cannot identify target GraphQL type of schema '${JSON.stringify(
-          schema
-        )}'`
-      )
+      // TODO: throw error
+      def.targetGraphQLType = 'json'
     }
+
+    return def
   }
 }
 
+type ConsolidatedSchemaObject = {
+  consolidatedTargetGraphQLTypes: string[]
+  consolidatedTypes: string[] // properties: { [propertyName: string]: SchemaObject[] }
+  consolidatedProperties: ({ [key: string]: SchemaObject })[]
+  consolidatedRequired: string[]
+}
+
+function consolidateTypes(
+  memberSchemaTypes: string[],
+  schemaType: string
+): string {
+  if (memberSchemaTypes.length > 0) {
+    // Check if the memberSchemaTypes are compatible with each other and the schema type
+    let memberTypesCompatible: boolean
+    if (schemaType) {
+      memberTypesCompatible = memberSchemaTypes.every(type => {
+        return type === schemaType
+      })
+    } else {
+      const consolidatedTypes = new Set(memberSchemaTypes)
+      memberTypesCompatible = consolidatedTypes.size === 1
+    }
+
+    if (memberTypesCompatible) {
+      return memberSchemaTypes[0]
+    } else {
+      return null
+    }
+  } else {
+    return null
+  }
+}
+
+function consolidateSubSchemas(
+  schemas: (SchemaObject | ReferenceObject)[],
+  oas: Oas3,
+  data: PreprocessingData,
+  depth: number
+): ConsolidatedSchemaObject {
+  const consolidated: ConsolidatedSchemaObject = {
+    consolidatedTypes: [],
+    consolidatedTargetGraphQLTypes: [],
+    consolidatedProperties: [],
+    consolidatedRequired: []
+  }
+
+  schemas.forEach(schema => {
+    // Dereference schemas
+    if ('$ref' in schema) {
+      schema = Oas3Tools.resolveRef(schema['$ref'], oas) as SchemaObject
+    } // Handle allOf
+
+    if (Array.isArray(schema.allOf)) {
+      const nestedConsolidated = consolidateSubSchemas(
+        schema.allOf,
+        oas,
+        data,
+        depth + 1
+      ) // Consolidate type
+
+      consolidated.consolidatedTypes = consolidated.consolidatedTypes.concat(
+        nestedConsolidated.consolidatedTypes
+      ) // Consolidate properties
+      consolidated.consolidatedProperties = consolidated.consolidatedProperties.concat(
+        nestedConsolidated.consolidatedProperties
+      ) // Consolidate required
+      consolidated.consolidatedRequired = consolidated.consolidatedRequired.concat(
+        nestedConsolidated.consolidatedRequired
+      )
+    } // Consolidate target GraphQL type
+
+    const memberTargetGraphQLType = Oas3Tools.getSchemaTargetGraphQLType(
+      schema,
+      data
+    )
+    if (memberTargetGraphQLType) {
+      consolidated.consolidatedTargetGraphQLTypes.push(memberTargetGraphQLType)
+    } // Consolidate type
+    if (schema.type) {
+      consolidated.consolidatedTypes.push(schema.type)
+    } // Consolidate properties
+    if (schema.properties) {
+      consolidated.consolidatedProperties.push(schema.properties)
+    } // Consolidate required
+    if (schema.required) {
+      consolidated.consolidatedRequired = consolidated.consolidatedRequired.concat(
+        schema.required
+      )
+    }
+  })
+
+  return consolidated
+}
+
 /**
- * Returns the index of the data definition object in the given list that
- * contains the same schema and preferred name as the given one. Returns -1 if
- * that schema could not be found.
+ * Returns the index of the data definition object in the given list that
+ * contains the same schema and preferred name as the given one. Returns -1 if
+ * that schema could not be found.
  */
 function getSchemaIndex(
   preferredName: string,
@@ -654,53 +759,43 @@ function getSchemaIndex(
   dataDefs: DataDefinition[]
 ): number {
   /**
-   * TODO: instead of iterating through the whole list every time, create a
-   * hashing function and store all of the DataDefinitions in a hashmap.
+   * TODO: instead of iterating through the whole list every time, create a
+   * hashing function and store all of the DataDefinitions in a hashmap.
    */
   for (let index = 0; index < dataDefs.length; index++) {
     const def = dataDefs[index]
-
     /**
-     * TODO: deepEquals is not sufficient. We also need to resolve references.
-     * However, deepEquals should work for vast majority of cases.
+     * TODO: deepEquals is not sufficient. We also need to resolve references.
+     * However, deepEquals should work for vast majority of cases.
      */
+
     if (preferredName === def.preferredName && deepEqual(schema, def.schema)) {
       return index
     }
-  }
+  } // The schema could not be found in the master list
 
-  // The schema could not be found in the master list
   return -1
 }
 
 /**
- * Determines the preferred name to use for schema regardless of name collisions.
+ * Determines the preferred name to use for schema regardless of name collisions.
  *
- * In other words, determines the ideal name for a schema.
+ * In other words, determines the ideal name for a schema.
  *
- * Similar to getSchemaName() except it does not check if the name has already
- * been taken.
+ * Similar to getSchemaName() except it does not check if the name has already
+ * been taken.
  */
 function getPreferredName(names: Oas3Tools.SchemaNames): string {
-  let schemaName
+  let schemaName // CASE: preferred name already known
 
-  // CASE: preferred name already known
   if (typeof names.preferred === 'string') {
-    schemaName = names.preferred
-
-    // CASE: name from reference
+    schemaName = names.preferred // CASE: name from reference
   } else if (typeof names.fromRef === 'string') {
-    schemaName = names.fromRef
-
-    // CASE: name from schema (i.e., "title" property in schema)
+    schemaName = names.fromRef // CASE: name from schema (i.e., "title" property in schema)
   } else if (typeof names.fromSchema === 'string') {
-    schemaName = names.fromSchema
-
-    // CASE: name from path
+    schemaName = names.fromSchema // CASE: name from path
   } else if (typeof names.fromPath === 'string') {
-    schemaName = names.fromPath
-
-    // CASE: placeholder name
+    schemaName = names.fromPath // CASE: placeholder name
   } else {
     schemaName = 'PlaceholderName'
   }
@@ -709,53 +804,47 @@ function getPreferredName(names: Oas3Tools.SchemaNames): string {
 }
 
 /**
- * Determines name to use for schema from previously determined schemaNames and
- * considering not reusing existing names.
+ * Determines name to use for schema from previously determined schemaNames and
+ * considering not reusing existing names.
  */
 function getSchemaName(
   usedNames: string[],
   names?: Oas3Tools.SchemaNames
 ): string {
   if (!names || typeof names === 'undefined') {
-    throw new Error(`Cannot create data definition without name(s).`)
-
-    // Cannot create a schema name from only preferred name
+    throw new Error(`Cannot create data definition without name(s).`) // Cannot create a schema name from only preferred name
   } else if (
     Object.keys(names).length === 1 &&
     typeof names.preferred === 'string'
   ) {
     throw new Error(
-      `Cannot create data definition without name(s), excluding the preferred name.`
+      `Cannot create data definition without name(s), excluding the preferred name.`
     )
   }
 
-  let schemaName
+  let schemaName // CASE: name from reference
 
-  // CASE: name from reference
   if (typeof names.fromRef === 'string') {
     const saneName = Oas3Tools.capitalize(Oas3Tools.sanitize(names.fromRef))
     if (!usedNames.includes(saneName)) {
       schemaName = names.fromRef
     }
-  }
+  } // CASE: name from schema (i.e., "title" property in schema)
 
-  // CASE: name from schema (i.e., "title" property in schema)
   if (!schemaName && typeof names.fromSchema === 'string') {
     const saneName = Oas3Tools.capitalize(Oas3Tools.sanitize(names.fromSchema))
     if (!usedNames.includes(saneName)) {
       schemaName = names.fromSchema
     }
-  }
+  } // CASE: name from path
 
-  // CASE: name from path
   if (!schemaName && typeof names.fromPath === 'string') {
     const saneName = Oas3Tools.capitalize(Oas3Tools.sanitize(names.fromPath))
     if (!usedNames.includes(saneName)) {
       schemaName = names.fromPath
     }
-  }
+  } // CASE: all names are already used - create approximate name
 
-  // CASE: all names are already used - create approximate name
   if (!schemaName) {
     const tempName = Oas3Tools.capitalize(
       Oas3Tools.sanitize(
@@ -769,12 +858,12 @@ function getSchemaName(
       )
     )
     let appendix = 2
-
     /**
-     * GraphQL Objects cannot share the name so if the name already exists in
-     * the master list append an incremental number until the name does not
-     * exist anymore.
+     * GraphQL Objects cannot share the name so if the name already exists in
+     * the master list append an incremental number until the name does not
+     * exist anymore.
      */
+
     while (usedNames.includes(`${tempName}${appendix}`)) {
       appendix++
     }
@@ -784,10 +873,90 @@ function getSchemaName(
   return schemaName
 }
 
+function collapseAllOf(
+  schema: SchemaObject | ReferenceObject,
+  references: { [reference: string]: SchemaObject },
+  oas: Oas3,
+  nesting: number = 0
+): SchemaObject {
+  // Dereference schema
+  if ('$ref' in schema) {
+    const referenceLocation = schema['$ref']
+    schema = Oas3Tools.resolveRef(schema['$ref'], oas) as SchemaObject // Return resolvee reference
+
+    if (referenceLocation in references) {
+      return references[referenceLocation]
+    } else {
+      // Store references in case of circular allOf
+      references[referenceLocation] = schema
+    }
+  }
+
+  if (
+    nesting >= 1 &&
+    (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf))
+  ) {
+    // TODO: throw error
+  } // Added due to Typescript typing issues
+
+  const collapsedSchema: SchemaObject = schema // Resolve allOf
+
+  if (Array.isArray(collapsedSchema.allOf)) {
+    collapsedSchema.allOf.forEach(subSchema => {
+      const resolvedSchema = collapseAllOf(
+        subSchema,
+        references,
+        oas,
+        nesting + 1
+      ) // Collapse type if applicable
+
+      if (resolvedSchema.type) {
+        if (!collapsedSchema.type) {
+          collapsedSchema.type = resolvedSchema.type // Add type if applicable
+        } else if (collapsedSchema.type !== resolvedSchema.type) {
+          // TODO: throw error different types
+        }
+      } // Collapse properties if applicable
+
+      if ('properties' in resolvedSchema) {
+        if (!('properties' in collapsedSchema)) {
+          collapsedSchema.properties = {}
+        }
+
+        Object.entries(resolvedSchema.properties).forEach(
+          ([propertyName, property]) => {
+            if (propertyName in collapsedSchema) {
+              // TODO: throw error conflicting property
+            } else {
+              collapsedSchema.properties[propertyName] = property
+            }
+          }
+        )
+      } // Collapse required if applicable
+
+      if ('required' in resolvedSchema) {
+        if (!('required' in collapsedSchema)) {
+          collapsedSchema.required = []
+        }
+
+        resolvedSchema.required.forEach(requiredProperty => {
+          if (!collapsedSchema.required.includes(requiredProperty)) {
+            collapsedSchema.required.push(requiredProperty)
+          }
+        })
+      }
+    }) // Remove allOf because allOf is resolved
+
+    collapsedSchema.allOf = []
+  }
+
+  return collapsedSchema
+}
+
 /**
- * Recursively add the (nested) allOf schemas to the root-level data definition
+ * Recursively add the (nested) allOf schemas to the root-level data definition
  *
- * @param def Root-level data definition
+ * @param def Root-level data definition
  */
 function addAllOfToDataDef(
   def: DataDefinition,
@@ -798,17 +967,15 @@ function addAllOfToDataDef(
   oas?: Oas3
 ) {
   schema.allOf.forEach(subSchema => {
-    // Dereference subSchema
+    // Dereference subSchema
     if ('$ref' in subSchema) {
       subSchema = Oas3Tools.resolveRef(subSchema['$ref'], oas)
-    }
+    } // Recurse into nested allOf (if applicable)
 
-    // Recurse into nested allOf (if applicable)
     if ('allOf' in subSchema) {
       addAllOfToDataDef(def, subSchema, required, isInputObjectType, data, oas)
-    }
+    } // Add properties of the subSchema
 
-    // Add properties of the subSchema
     addObjectPropertiesToDataDef(
       def,
       subSchema,
@@ -821,7 +988,7 @@ function addAllOfToDataDef(
 }
 
 /**
- * Add the properties to the data definition
+ * Add the properties to the data definition
  */
 function addObjectPropertiesToDataDef(
   def: DataDefinition,
@@ -832,9 +999,9 @@ function addObjectPropertiesToDataDef(
   oas?: Oas3
 ) {
   /**
-   * Resolve all required properties
+   * Resolve all required properties
    *
-   * TODO: required may contain duplicates, which is not necessarily a problem
+   * TODO: required may contain duplicates, which is not necessarily a problem
    */
   if (Array.isArray(schema.required)) {
     schema.required.forEach(requiredProperty => {
@@ -844,37 +1011,37 @@ function addObjectPropertiesToDataDef(
 
   for (let propertyKey in schema.properties) {
     let propSchemaName = propertyKey
-    const propSchema = schema.properties[propertyKey]
+    let propSchema = schema.properties[propertyKey]
 
     if ('$ref' in propSchema) {
       propSchemaName = propSchema['$ref'].split('/').pop()
+      propSchema = Oas3Tools.resolveRef(propSchema['$ref'], oas) as SchemaObject
     }
 
     if (!(propertyKey in def.subDefinitions)) {
       const subDefinition = createDataDef(
         {
           fromRef: propSchemaName,
-          fromSchema: propSchema.title // TODO: Currently not utilized because of fromRef but arguably, propertyKey is a better field name and title is a better type name
+          fromSchema: propSchema.title // TODO: Currently not utilized because of fromRef but arguably, propertyKey is a better field name and title is a better type name
         },
-        propSchema as SchemaObject,
+        propSchema,
         isInputObjectType,
         data,
         undefined,
         oas
-      )
+      ) // Add field type references
 
-      // Add field type references
       def.subDefinitions[propertyKey] = subDefinition
     } else {
       handleWarning({
         typeKey: 'DUPLICATE_FIELD_NAME',
         message:
-          `By way of resolving 'allOf', multiple schemas contain ` +
-          `properties with the same name, preventing consolidation. Cannot ` +
-          `add property '${propertyKey}' from schema '${JSON.stringify(
+          `By way of resolving 'allOf', multiple schemas contain ` +
+          `properties with the same name, preventing consolidation. Cannot ` +
+          `add property '${propertyKey}' from schema '${JSON.stringify(
             schema
-          )}' ` +
-          `to dataDefinition '${JSON.stringify(def)}'`,
+          )}' ` +
+          `to dataDefinition '${JSON.stringify(def)}'`,
         data,
         log: preprocessingLog
       })

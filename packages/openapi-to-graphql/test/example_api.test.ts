@@ -1287,7 +1287,7 @@ test('Option customResolver with links', () => {
       employerId
       employerCompany {
         name
-        ceoUsername 
+        ceoUsername
         ceoUser {
           name
         }
@@ -1906,7 +1906,7 @@ test('Non-nullable properties from nested allOf', () => {
       fields {
         name
         type {
-          kind 
+          kind
           ofType {
             name
             kind
