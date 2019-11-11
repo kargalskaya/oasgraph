@@ -1662,32 +1662,63 @@ test('Generate "Equivalent to..." messages', () => {
       const errors = validate(schema, ast)
       expect(errors).toEqual([])
       return graphql(schema, query).then(result => {
+        // TODO: Problem with spaces in string comparisons
+
+        // // Make sure all query fields have the message
+        // expect(
+        //   result.data['__schema']['queryType']['fields'].every(field => {
+        //     return field.description.includes('\n\nEquivalent to GET ')
+        //   })
+        // ).toBe(true)
+
+        // // Make sure all mutation fields have the message
+        // expect(
+        //   result.data['__schema']['mutationType']['fields'].every(field => {
+        //     return field.description.includes('\n\nEquivalent to ')
+        //   })
+        // ).toBe(true)
+
+        // // Check full message on a particular field
+        // expect(
+        //   result.data['__schema']['queryType']['fields'].find(field => {
+        //     return field.type.name === 'Car'
+        //   })
+        // ).toEqual({
+        //   type: {
+        //     name: 'Car'
+        //   },
+        //   description:
+        //     'Returns a car to test nesting of sub operations\n\nEquivalent to GET /users/{username}/car'
+        // })
+
         // Make sure all query fields have the message
         expect(
           result.data['__schema']['queryType']['fields'].every(field => {
-            return field.description.includes('\n\nEquivalent to GET ')
+            return field.description
+              .replace(/\s+/g, ' ')
+              .includes('Equivalent to GET ')
           })
         ).toBe(true)
 
         // Make sure all mutation fields have the message
         expect(
           result.data['__schema']['mutationType']['fields'].every(field => {
-            return field.description.includes('\n\nEquivalent to ')
+            return field.description
+              .replace(/\s+/g, ' ')
+              .includes('Equivalent to ')
           })
         ).toBe(true)
 
         // Check full message on a particular field
         expect(
-          result.data['__schema']['queryType']['fields'].find(field => {
-            return field.type.name === 'Car'
-          })
-        ).toEqual({
-          type: {
-            name: 'Car'
-          },
-          description:
-            'Returns a car to test nesting of sub operations\n\nEquivalent to GET /users/{username}/car'
-        })
+          result.data['__schema']['queryType']['fields']
+            .find(field => {
+              return field.type.name === 'Car'
+            })
+            .description.replace(/\s+/g, ' ')
+        ).toEqual(
+          'Returns a car to test nesting of sub operations Equivalent to GET /users/{username}/car'
+        )
       })
     })
 

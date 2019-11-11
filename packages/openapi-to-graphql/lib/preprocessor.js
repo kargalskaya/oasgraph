@@ -197,13 +197,12 @@ function getProcessedSecuritySchemes(oas, data) {
                 };
                 break;
             case 'http':
-                switch (protocol.scheme
-                /**
-                 * TODO: HTTP has a number of authentication types
-                 *
-                 * See http://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml
-                 */
-                ) {
+                switch (protocol.scheme) {
+                    /**
+                     * TODO: HTTP has a number of authentication types
+                     *
+                     * See http://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml
+                     */
                     case 'basic':
                         description = `Basic auth credentials for security protocol '${key}'`;
                         parameters = {
@@ -296,10 +295,11 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
         Object.keys(links).forEach(linkKey => {
             saneLinks[Oas3Tools.sanitize(linkKey)] = links[linkKey];
         });
-    } // Determine the index of possible existing data definition
+    }
+    // Determine the index of possible existing data definition
     const index = getSchemaIndex(preferredName, schema, data.defs);
     if (index !== -1) {
-        // Found existing data definition. Fetch it
+        // Found existing data definition and fetch it
         const existingDataDef = data.defs[index];
         /**
          * Collapse links if possible, i.e. if the current operation has links,
@@ -349,14 +349,12 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
          *
          * Perhaps, just copy it at the root level (operation schema)
          */
-        const consolidatedSchema = collapseAllOf(JSON.parse(JSON.stringify(schema)), {}, oas); // console.log('final',consolidatedSchema) // if (schema.allOf) { //   console.log(targetGraphQLType) //   console.log(schema) //   console.log(consolidatedSchema) //   console.log() // } // if (schema.allOf) { //   console.log(targetGraphQLType) //   console.log(schema) //   console.log(consolidatedSchema) //   console.log() // }
+        const consolidatedSchema = collapseAllOf(schema, {}, oas);
         const targetGraphQLType = Oas3Tools.getSchemaTargetGraphQLType(consolidatedSchema, data);
         const def = {
             preferredName,
             /**
              * Note that schema may contain $ref or schema composition (e.g. allOf)
-             *
-             * Perhaps use/related to the consolidated schema?
              *
              * TODO: the schema is used in getSchemaIndex, which allows us to check
              * whether a dataDef has already been created for that particular
@@ -372,23 +370,27 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
             iotName: saneInputName
         }; // Add the def to the master list
         data.defs.push(def);
-        if (Array.isArray(consolidatedSchema.anyOf) && Array.isArray(consolidatedSchema.oneOf)) {
+        if (Array.isArray(consolidatedSchema.anyOf) &&
+            Array.isArray(consolidatedSchema.oneOf)) {
             // TODO: warning currently do not support both anyOf and oneOf
             def.targetGraphQLType = 'json';
             return def;
         }
         // const allOfConsolidated = Array.isArray(consolidatedSchema.allOf)
         //   ? consolidateSubSchemas(consolidatedSchema.allOf, oas, data, 0)
-        //   : null // const anyOfConsolidated = Array.isArray(consolidatedSchema.anyOf) //   ? consolidateSubSchemas(consolidatedSchema.anyOf, oas, data, 0) //   : null
+        //   : null 
+        // const anyOfConsolidated = Array.isArray(consolidatedSchema.anyOf) 
+        //   ? consolidateSubSchemas(consolidatedSchema.anyOf, oas, data, 0) 
+        //   : null
         const oneOfConsolidated = Array.isArray(consolidatedSchema.oneOf)
             ? consolidateSubSchemas(consolidatedSchema.oneOf, oas, data, 0)
             : null;
-        // Contains minimum the raw schema and everything in allOf, mandatory fields 
-        // // Add allOf to the consolidatedSchema 
+        // Contains minimum the raw schema and everything in allOf, mandatory fields
+        // // Add allOf to the consolidatedSchema
         // if (allOfConsolidated) {
         //   if (allOfConsolidatedType !== targetGraphQLType) {
-        //     // TODO: enum 
-        //     // TODO: warning 
+        //     // TODO: enum
+        //     // TODO: warning
         //     def.targetGraphQLType = 'json'
         //     return def
         //   }
@@ -397,8 +399,8 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
         //       Object.entries(properties).forEach(([propertyName, property]) => {
         //         if (propertyName in consolidatedSchema) {
         //           if (!deepEqual(property, consolidatedSchema[propertyName])) {
-        //             // TODO: deepEquals will not resolve references 
-        //             // TODO: warning: allOf is not compatible with the parent schema or itself 
+        //             // TODO: deepEquals will not resolve references
+        //             // TODO: warning: allOf is not compatible with the parent schema or itself
         //             def.targetGraphQLType = 'json'
         //             return def
         //           }
@@ -482,7 +484,7 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
             }
         }
         // if (anyOfConsolidated) {
-        //   // Every member type should be an object 
+        //   // Every member type should be an object
         //   if (anyOfConsolidated.consolidatedTargetGraphQLTypes.length > 0 &&
         //     anyOfConsolidated.consolidatedTargetGraphQLTypes.every((memberTargetGraphQLTypes) => {
         //       return memberTargetGraphQLTypes === 'object'
@@ -494,15 +496,15 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
         //       Object.keys(properties).forEach((propertyName) => {
         //         if (
         //           !incompatibleProperties.has(propertyName) &&
-        //           //  No preexisting conflicts 
+        //           //  No preexisting conflicts
         //           propertyName in consolidatedSchema &&
-        //           //  Property already exists in the consolidated schema 
+        //           //  Property already exists in the consolidated schema
         //           !deepEqual(properties[propertyName], consolidatedSchema[propertyName])
-        //           //  Property conflicts with that in the consolidated schema 
+        //           //  Property conflicts with that in the consolidated schema
         //         ) {
         //           incompatibleProperties.add(propertyName)
         //           consolidatedSchema[propertyName] = undefined
-        //           //  Do not create these properties. Will add them in later. 
+        //           //  Do not create these properties. Will add them in later.
         //         }
         //       })
         //     })
@@ -515,17 +517,17 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
         //       data,
         //       oas
         //     )
-        //     //  Add in incompatible properties 
+        //     //  Add in incompatible properties
         //     incompatibleProperties.forEach((propertyName) => {
-        //       //  TODO: incompatible property 
-        //       //  TODO: add description 
+        //       //  TODO: incompatible property
+        //       //  TODO: add description
         //       def.subDefinitions[propertyName] = {
         //         targetGraphQLType: 'json'
         //       }
         //     })
         //     return def
         //   } else {
-        //     //  TODO: warning different types 
+        //     //  TODO: warning different types
         //     def.targetGraphQLType = 'json'
         //     return def
         //   }

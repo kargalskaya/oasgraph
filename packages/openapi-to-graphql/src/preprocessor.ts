@@ -403,17 +403,18 @@ export function createDataDef(
     Object.keys(links).forEach(linkKey => {
       saneLinks[Oas3Tools.sanitize(linkKey)] = links[linkKey]
     })
-  } // Determine the index of possible existing data definition
+  }
 
+  // Determine the index of possible existing data definition
   const index = getSchemaIndex(preferredName, schema, data.defs)
   if (index !== -1) {
-    // Found existing data definition. Fetch it
+    // Found existing data definition and fetch it
     const existingDataDef = data.defs[index]
+
     /**
      * Collapse links if possible, i.e. if the current operation has links,
      * combine them with the prexisting ones
      */
-
     if (typeof saneLinks !== 'undefined') {
       if (typeof existingDataDef.links !== 'undefined') {
         // Check if there are any overlapping links
@@ -437,12 +438,12 @@ export function createDataDef(
             })
           }
         })
+
         /**
          * Collapse the links
          *
          * Avoid overwriting preexisting links
          */
-
         existingDataDef.links = { ...saneLinks, ...existingDataDef.links }
       } else {
         // No preexisting links, so simply assign the links
@@ -469,11 +470,8 @@ export function createDataDef(
      *
      * Perhaps, just copy it at the root level (operation schema)
      */
-    const consolidatedSchema = collapseAllOf(
-      JSON.parse(JSON.stringify(schema)),
-      {},
-      oas
-    ) // console.log('final',consolidatedSchema) // if (schema.allOf) { //   console.log(targetGraphQLType) //   console.log(schema) //   console.log(consolidatedSchema) //   console.log() // } // if (schema.allOf) { //   console.log(targetGraphQLType) //   console.log(schema) //   console.log(consolidatedSchema) //   console.log() // }
+    const consolidatedSchema = collapseAllOf(schema, {}, oas)
+
     const targetGraphQLType = Oas3Tools.getSchemaTargetGraphQLType(
       consolidatedSchema as SchemaObject,
       data
@@ -484,8 +482,6 @@ export function createDataDef(
 
       /**
        * Note that schema may contain $ref or schema composition (e.g. allOf)
-       *
-       * Perhaps use/related to the consolidated schema?
        *
        * TODO: the schema is used in getSchemaIndex, which allows us to check
        * whether a dataDef has already been created for that particular
@@ -516,7 +512,10 @@ export function createDataDef(
 
     // const allOfConsolidated = Array.isArray(consolidatedSchema.allOf)
     //   ? consolidateSubSchemas(consolidatedSchema.allOf, oas, data, 0)
-    //   : null // const anyOfConsolidated = Array.isArray(consolidatedSchema.anyOf) //   ? consolidateSubSchemas(consolidatedSchema.anyOf, oas, data, 0) //   : null
+    //   : null
+    // const anyOfConsolidated = Array.isArray(consolidatedSchema.anyOf)
+    //   ? consolidateSubSchemas(consolidatedSchema.anyOf, oas, data, 0)
+    //   : null
     const oneOfConsolidated = Array.isArray(consolidatedSchema.oneOf)
       ? consolidateSubSchemas(consolidatedSchema.oneOf, oas, data, 0)
       : null

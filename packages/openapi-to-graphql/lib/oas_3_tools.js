@@ -18,6 +18,7 @@ const Swagger2OpenAPI = require("swagger2openapi");
 const OASValidator = require("oas-validator");
 const debug_1 = require("debug");
 const utils_1 = require("./utils");
+const rfdc = require("rfdc");
 const httpLog = debug_1.default('http');
 const preprocessingLog = debug_1.default('preprocessing');
 const translationLog = debug_1.default('translation');
@@ -54,7 +55,7 @@ function getValidOAS3(spec) {
                 throw new Error(`Validation of OpenAPI Specification failed.`);
             }
             preprocessingLog(`OpenAPI Specification is validated`);
-            return spec;
+            return rfdc()(spec);
         }
         else {
             throw new Error(`Invalid specification provided`);
