@@ -63,8 +63,9 @@ export function preprocessOas(
         log: preprocessingLog
       })
     }) // Do not overwrite preexisting security schemes
-    data.security = { ...currentSecurity, ...data.security } // Process all operations
+    data.security = { ...currentSecurity, ...data.security }
 
+    // Process all operations
     for (let path in oas.paths) {
       for (let method in oas.paths[path]) {
         //  Only consider Operation Objects
@@ -76,8 +77,9 @@ export function preprocessOas(
         const operationString =
           oass.length === 1
             ? Oas3Tools.formatOperationString(method, path)
-            : Oas3Tools.formatOperationString(method, path, oas.info.title) // Determine description
+            : Oas3Tools.formatOperationString(method, path, oas.info.title)
 
+        // Determine description
         let description = endpoint.description
         if (
           (typeof description !== 'string' || description === '') &&
@@ -91,9 +93,10 @@ export function preprocessOas(
         }
 
         if (data.options.equivalentToMessages) {
-          description += `\n\nEquivalent to ${operationString}`
-        } // Hold on to the operationId
+          description += `\n\nEquivalent to ${operationString}`
+        }
 
+        // Hold on to the operationId
         const operationId =
           typeof endpoint.operationId !== 'undefined'
             ? endpoint.operationId
@@ -142,8 +145,9 @@ export function preprocessOas(
             log: preprocessingLog
           })
           continue
-        } // Links
+        }
 
+        // Links
         const links = Oas3Tools.getEndpointLinks(path, method, oas, data)
 
         const responseDefinition = createDataDef(
@@ -153,14 +157,17 @@ export function preprocessOas(
           data,
           links,
           oas
-        ) // Parameters
+        )
 
-        const parameters = Oas3Tools.getParameters(path, method, oas) // Security protocols
+        // Parameters
+        const parameters = Oas3Tools.getParameters(path, method, oas)
 
+        // Security protocols
         const securityRequirements = options.viewer
           ? Oas3Tools.getSecurityRequirements(path, method, data.security, oas)
-          : [] // Servers
+          : []
 
+        // Servers
         const servers = Oas3Tools.getServers(path, method, oas) // Whether to place this operation into an authentication viewer
 
         const inViewer =
@@ -186,8 +193,9 @@ export function preprocessOas(
           isMutation,
           statusCode,
           oas
-        } // Handle operationId property name collision // May occur if multiple OAS are provided
+        }
 
+        // Handle operationId property name collision // May occur if multiple OAS are provided
         if (operationId in data.operations) {
           handleWarning({
             typeKey: 'DUPLICATE_OPERATIONID',
@@ -353,8 +361,9 @@ function getProcessedSecuritySchemes(
           data,
           log: preprocessingLog
         })
-    } // Add protocol data to the output
+    }
 
+    // Add protocol data to the output
     result[key] = {
       rawName: key,
       def: protocol,
@@ -497,8 +506,9 @@ export function createDataDef(
       links: saneLinks,
       otName: saneName,
       iotName: saneInputName
-    } // Add the def to the master list
+    }
 
+    // Add the def to the master list
     data.defs.push(def)
 
     if (
@@ -801,8 +811,9 @@ function consolidateSubSchemas(
     // Dereference schemas
     if ('$ref' in schema) {
       schema = Oas3Tools.resolveRef(schema['$ref'], oas) as SchemaObject
-    } // Handle allOf
+    }
 
+    // Handle allOf
     if (Array.isArray(schema.allOf)) {
       const nestedConsolidated = consolidateSubSchemas(
         schema.allOf,
@@ -820,21 +831,28 @@ function consolidateSubSchemas(
       consolidated.consolidatedRequired = consolidated.consolidatedRequired.concat(
         nestedConsolidated.consolidatedRequired
       )
-    } // Consolidate target GraphQL type
+    }
 
+    // Consolidate target GraphQL type
     const memberTargetGraphQLType = Oas3Tools.getSchemaTargetGraphQLType(
       schema,
       data
     )
     if (memberTargetGraphQLType) {
       consolidated.consolidatedTargetGraphQLTypes.push(memberTargetGraphQLType)
-    } // Consolidate type
+    }
+
+    // Consolidate type
     if (schema.type) {
       consolidated.consolidatedTypes.push(schema.type)
-    } // Consolidate properties
+    }
+
+    // Consolidate properties
     if (schema.properties) {
       consolidated.consolidatedProperties.push(schema.properties)
-    } // Consolidate required
+    }
+
+    // Consolidate required
     if (schema.required) {
       consolidated.consolidatedRequired = consolidated.consolidatedRequired.concat(
         schema.required
@@ -869,8 +887,9 @@ function getSchemaIndex(
     if (preferredName === def.preferredName && deepEqual(schema, def.schema)) {
       return index
     }
-  } // The schema could not be found in the master list
+  }
 
+  // The schema could not be found in the master list
   return -1
 }
 
@@ -926,22 +945,25 @@ function getSchemaName(
     if (!usedNames.includes(saneName)) {
       schemaName = names.fromRef
     }
-  } // CASE: name from schema (i.e., "title" property in schema)
+  }
 
+  // CASE: name from schema (i.e., "title" property in schema)
   if (!schemaName && typeof names.fromSchema === 'string') {
     const saneName = Oas3Tools.capitalize(Oas3Tools.sanitize(names.fromSchema))
     if (!usedNames.includes(saneName)) {
       schemaName = names.fromSchema
     }
-  } // CASE: name from path
+  }
 
+  // CASE: name from path
   if (!schemaName && typeof names.fromPath === 'string') {
     const saneName = Oas3Tools.capitalize(Oas3Tools.sanitize(names.fromPath))
     if (!usedNames.includes(saneName)) {
       schemaName = names.fromPath
     }
-  } // CASE: all names are already used - create approximate name
+  }
 
+  // CASE: all names are already used - create approximate name
   if (!schemaName) {
     const tempName = Oas3Tools.capitalize(
       Oas3Tools.sanitize(
@@ -994,8 +1016,9 @@ function collapseAllOf(
     (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf))
   ) {
     // TODO: throw error
-  } // Added due to Typescript typing issues
+  }
 
+  // Added due to Typescript typing issues
   const collapsedSchema: SchemaObject = schema // Resolve allOf
 
   if (Array.isArray(collapsedSchema.allOf)) {
@@ -1013,8 +1036,9 @@ function collapseAllOf(
         } else if (collapsedSchema.type !== resolvedSchema.type) {
           // TODO: throw error different types
         }
-      } // Collapse properties if applicable
+      }
 
+      // Collapse properties if applicable
       if ('properties' in resolvedSchema) {
         if (!('properties' in collapsedSchema)) {
           collapsedSchema.properties = {}
@@ -1029,8 +1053,9 @@ function collapseAllOf(
             }
           }
         )
-      } // Collapse required if applicable
+      }
 
+      // Collapse required if applicable
       if ('required' in resolvedSchema) {
         if (!('required' in collapsedSchema)) {
           collapsedSchema.required = []
@@ -1068,12 +1093,14 @@ function addAllOfToDataDef(
     // Dereference subSchema
     if ('$ref' in subSchema) {
       subSchema = Oas3Tools.resolveRef(subSchema['$ref'], oas)
-    } // Recurse into nested allOf (if applicable)
+    }
 
+    // Recurse into nested allOf (if applicable)
     if ('allOf' in subSchema) {
       addAllOfToDataDef(def, subSchema, required, isInputObjectType, data, oas)
-    } // Add properties of the subSchema
+    }
 
+    // Add properties of the subSchema
     addObjectPropertiesToDataDef(
       def,
       subSchema,
