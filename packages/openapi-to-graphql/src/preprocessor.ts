@@ -520,196 +520,184 @@ export function createDataDef(
       return def
     }
 
-    // const allOfConsolidated = Array.isArray(consolidatedSchema.allOf)
-    //   ? consolidateSubSchemas(consolidatedSchema.allOf, oas, data, 0)
-    //   : null
-    // const anyOfConsolidated = Array.isArray(consolidatedSchema.anyOf)
-    //   ? consolidateSubSchemas(consolidatedSchema.anyOf, oas, data, 0)
-    //   : null
+    const anyOfConsolidated = Array.isArray(consolidatedSchema.anyOf)
+      ? consolidateSubSchemas(consolidatedSchema.anyOf, oas, data, 0)
+      : null
     const oneOfConsolidated = Array.isArray(consolidatedSchema.oneOf)
       ? consolidateSubSchemas(consolidatedSchema.oneOf, oas, data, 0)
       : null
 
-    // Contains minimum the raw schema and everything in allOf, mandatory fields
-
-    // // Add allOf to the consolidatedSchema
-    // if (allOfConsolidated) {
-    //   if (allOfConsolidatedType !== targetGraphQLType) {
-    //     // TODO: enum
-
-    //     // TODO: warning
-    //     def.targetGraphQLType = 'json'
-    //     return def
-    //   }
-
-    //   if (allOfConsolidatedType === 'object') {
-    //     allOfConsolidated.consolidatedProperties.forEach((properties) => {
-    //       Object.entries(properties).forEach(([propertyName, property]) => {
-    //         if (propertyName in consolidatedSchema) {
-    //           if (!deepEqual(property, consolidatedSchema[propertyName])) {
-    //             // TODO: deepEquals will not resolve references
-
-    //             // TODO: warning: allOf is not compatible with the parent schema or itself
-    //             def.targetGraphQLType = 'json'
-    //             return def
-    //           }
-    //         } else {
-    //           console.log(property)
-    //           consolidatedSchema[propertyName] = property
-    //         }
-    //       })
-    //     })
-    //   }
-    //   allOfConsolidated.consolidatedRequired.forEach((requiredPropertyName) => {
-    //     if (Array.isArray(consolidatedSchema.required) && !consolidatedSchema.required.includes(requiredPropertyName)) {
-    //       consolidatedSchema.required.concat(requiredPropertyName)
-    //     }
-    //   })
-    // }
-
-    // if (consolidatedSchema.properties && consolidatedSchema.properties.nomenclature) {
-    //   console.log(JSON.stringify(consolidatedSchema.properties.nomenclature))
-    // }
-
+    // oneOf will ideally be turned into a union type
     if (oneOfConsolidated) {
-      if (oneOfConsolidated.consolidatedProperties.length > 0) {
-        if (
-          oneOfConsolidated.consolidatedTargetGraphQLTypes.some(
-            memberTargetGraphQLTypes => {
-              return memberTargetGraphQLTypes === 'object'
-            }
-          )
-        ) {
-          /**
-           * At this point, we know that oneOf contains member schemas that are
-           * object types. We want to create a GraphQL union using these types.
-           */
-
-          /**
-           * Ensure that schema is compatiable with oneOf
-           */
-          if (targetGraphQLType === null || targetGraphQLType === 'object') {
-            def.subDefinitions = []
-
-            consolidatedSchema.oneOf.forEach(subSchema => {
-              // Dereference subSchema
-              let fromRef: string
-              if ('$ref' in subSchema) {
-                fromRef = subSchema['$ref'].split('/').pop()
-                subSchema = Oas3Tools.resolveRef(
-                  subSchema['$ref'],
-                  oas
-                ) as SchemaObject
-              }
-
-              // TODO: properties should be handled like interfaces, which also means they need to be passed into the subschemas
-
-              // TODO: ensure that unions are not composed of other unions
-
-              // Member types of GraphQL unions must be object base types
-              if (subSchema.type === 'object') {
-                const subDefinition = createDataDef(
-                  {
-                    fromRef,
-                    fromSchema: subSchema.title,
-                    fromPath: `${saneName}Member`
-                  },
-                  subSchema,
-                  isInputObjectType,
-                  data,
-                  undefined,
-                  oas
-                )
-                ;(def.subDefinitions as DataDefinition[]).push(subDefinition)
-              } else {
-                // TODO: mitigation default JSON type
-
-                handleWarning({
-                  typeKey: 'UNION_MEMBER_NON_OBJECT',
-                  message:
-                    `Union member type '${JSON.stringify(subSchema)}' in ` +
-                    `union type '${JSON.stringify(
-                      consolidatedSchema
-                    )}' is not an object ` +
-                    `type. Union member types must be object base types.`,
-                  data,
-                  log: preprocessingLog
-                })
-              }
-            })
-
-            // Add the def to the master list
-            data.defs.push(def)
-            def.targetGraphQLType = 'union'
-            return def
-          } else {
-            // TODO: warning mismatching types between parent schema/allOf and oneOf member schemas
-
-            // TODO: mitigatiom default JSON type
-            def.targetGraphQLType = 'json'
-            return def
+      // unions must be created from object types
+      if (
+        oneOfConsolidated.consolidatedTargetGraphQLTypes.some(
+          // Some because not all member schemas have a type, could just be a required field, for example
+          memberTargetGraphQLTypes => {
+            return memberTargetGraphQLTypes === 'object'
           }
+        ) &&
+        // Redundant check
+        oneOfConsolidated.consolidatedProperties.length > 0
+      ) {
+        // Ensure that parent schema is compatiable with oneOf
+        if (targetGraphQLType === null || targetGraphQLType === 'object') {
+          def.subDefinitions = []
+
+          consolidatedSchema.oneOf.forEach(subSchema => {
+            // Dereference subSchema
+            let fromRef: string
+            if ('$ref' in subSchema) {
+              fromRef = subSchema['$ref'].split('/').pop()
+              subSchema = Oas3Tools.resolveRef(
+                subSchema['$ref'],
+                oas
+              ) as SchemaObject
+            }
+
+            // TODO: properties should be handled like interfaces, which also means they need to be passed into the subschemas
+
+            // TODO: ensure that unions are not composed of other unions
+
+            // Member types of GraphQL unions must be object base types
+            if (subSchema.type === 'object') {
+              const subDefinition = createDataDef(
+                {
+                  fromRef,
+                  fromSchema: subSchema.title,
+                  fromPath: `${saneName}Member`
+                },
+                subSchema,
+                isInputObjectType,
+                data,
+                undefined,
+                oas
+              )
+              ;(def.subDefinitions as DataDefinition[]).push(subDefinition)
+            } else {
+              // TODO: mitigation default JSON type
+
+              handleWarning({
+                typeKey: 'UNION_MEMBER_NON_OBJECT',
+                message:
+                  `Union member type '${JSON.stringify(subSchema)}' in ` +
+                  `union type '${JSON.stringify(
+                    consolidatedSchema
+                  )}' is not an object ` +
+                  `type. Union member types must be object base types.`,
+                data,
+                log: preprocessingLog
+              })
+            }
+          })
+
+          // Add the def to the master list
+          data.defs.push(def)
+          def.targetGraphQLType = 'union'
+          return def
+        } else {
+          // The parent schema is incompatible with the member schemas
+
+          handleWarning({
+            typeKey: 'COMBINE_SCHEMAS',
+            message:
+              `Schema '${JSON.stringify(schema)}' contains 'oneOf' so create ` +
+              `a GraphQL union type but the parent object is a non-object ` +
+              `type and member types must be object types.`,
+            mitigationAddendum: `The schema will be made into an arbitrary JSON type.`,
+            data,
+            log: preprocessingLog
+          })
+
+          // Add the def to the master list
+          data.defs.push(def)
+          def.targetGraphQLType = 'json'
+          return def
         }
       } else {
-        // TODO: cannot create union of different scalar types, default JSON type
+        // The member schemas are not all object types
+
+        handleWarning({
+          typeKey: 'COMBINE_SCHEMAS',
+          message:
+            `Schema '${JSON.stringify(schema)}' contains 'oneOf' so create ` +
+            `a GraphQL union type but some member schemas are non-object ` +
+            `type and union member types must be object types.`,
+          mitigationAddendum: `The schema will be made into an arbitrary JSON type.`,
+          data,
+          log: preprocessingLog
+        })
+
+        // Add the def to the master list
+        data.defs.push(def)
         def.targetGraphQLType = 'json'
         return def
       }
     }
 
-    // if (anyOfConsolidated) {
-    //   // Every member type should be an object
-    //   if (anyOfConsolidated.consolidatedTargetGraphQLTypes.length > 0 &&
-    //     anyOfConsolidated.consolidatedTargetGraphQLTypes.every((memberTargetGraphQLTypes) => {
-    //       return memberTargetGraphQLTypes === 'object'
-    //     }) &&
-    //     anyOfConsolidated.consolidatedProperties.length > 0
-    //   ) {
-    //     const incompatibleProperties = new Set<string>()
-    //     anyOfConsolidated.consolidatedProperties.forEach((properties) => {
-    //       Object.keys(properties).forEach((propertyName) => {
-    //         if (
-    //           !incompatibleProperties.has(propertyName) &&
-    //           //  No preexisting conflicts
-    //           propertyName in consolidatedSchema &&
-    //           //  Property already exists in the consolidated schema
-    //           !deepEqual(properties[propertyName], consolidatedSchema[propertyName])
-    //           //  Property conflicts with that in the consolidated schema
-    //         ) {
-    //           incompatibleProperties.add(propertyName)
-    //           consolidatedSchema[propertyName] = undefined
-    //           //  Do not create these properties. Will add them in later.
-    //         }
-    //       })
-    //     })
-    //     def.subDefinitions = {}
-    //     addObjectPropertiesToDataDef(
-    //       def,
-    //       consolidatedSchema,
-    //       def.required,
-    //       isInputObjectType,
-    //       data,
-    //       oas
-    //     )
+    /**
+     * anyOf will ideally be turned into an object type
+     *
+     * Fields common to all member schemas will be made non-null
+     */
+    if (anyOfConsolidated) {
+      // Every member type should be an object
+      if (
+        anyOfConsolidated.consolidatedTargetGraphQLTypes.length > 0 &&
+        anyOfConsolidated.consolidatedTargetGraphQLTypes.every(
+          memberTargetGraphQLTypes => {
+            return memberTargetGraphQLTypes === 'object'
+          }
+        ) &&
+        // Redundant check
+        anyOfConsolidated.consolidatedProperties.length > 0
+      ) {
+        const incompatibleProperties = new Set<string>()
+        anyOfConsolidated.consolidatedProperties.forEach(properties => {
+          Object.keys(properties).forEach(propertyName => {
+            if (
+              !incompatibleProperties.has(propertyName) &&
+              //  No preexisting conflicts
+              propertyName in consolidatedSchema &&
+              //  Property already exists in the consolidated schema
+              !deepEqual(
+                properties[propertyName],
+                consolidatedSchema[propertyName]
+              )
+              //  Property conflicts with that in the consolidated schema
+            ) {
+              incompatibleProperties.add(propertyName)
+              consolidatedSchema[propertyName] = undefined
+              //  Do not create these properties. Will add them in later.
+            }
+          })
+        })
+        def.subDefinitions = {}
+        addObjectPropertiesToDataDef(
+          def,
+          consolidatedSchema,
+          def.required,
+          isInputObjectType,
+          data,
+          oas
+        )
 
-    //     //  Add in incompatible properties
-    //     incompatibleProperties.forEach((propertyName) => {
+        //  Add in incompatible properties
+        incompatibleProperties.forEach(propertyName => {
+          //  TODO: incompatible property
 
-    //       //  TODO: incompatible property
-
-    //       //  TODO: add description
-    //       def.subDefinitions[propertyName] = {
-    //         targetGraphQLType: 'json'
-    //       }
-    //     })
-    //     return def
-    //   } else {
-
-    //     //  TODO: warning different types
-    //     def.targetGraphQLType = 'json'
-    //     return def
-    //   }
-    // }
+          //  TODO: add description
+          def.subDefinitions[propertyName] = {
+            targetGraphQLType: 'json'
+          }
+        })
+        return def
+      } else {
+        //  TODO: warning different types
+        def.targetGraphQLType = 'json'
+        return def
+      }
+    }
 
     if (targetGraphQLType) {
       switch (targetGraphQLType) {
