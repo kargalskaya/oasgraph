@@ -123,8 +123,9 @@ export function preprocessOas(
                 undefined,
                 oas
               )
-            : undefined // Response schema
+            : undefined
 
+        // Response schema
         const {
           responseContentType,
           responseSchema,
@@ -178,8 +179,9 @@ export function preprocessOas(
         const inViewer =
           securityRequirements.length > 0 && data.options.viewer !== false
 
-        const isMutation = method.toLowerCase() !== 'get' // Store determined information for operation
+        const isMutation = method.toLowerCase() !== 'get'
 
+        // Store determined information for operation
         const operation: Operation = {
           operationId,
           operationString,
@@ -268,7 +270,8 @@ function getProcessedSecuritySchemes(
   for (let key in security) {
     const protocol = security[key]
 
-    let schema // Determine the parameters and the schema for the security protocol
+    // Determine the parameters and the schema for the security protocol
+    let schema
     let parameters = {}
     let description
     switch (protocol.type) {
@@ -333,7 +336,7 @@ function getProcessedSecuritySchemes(
               log: preprocessingLog
             })
         }
-        break // TODO: Implement
+        break
 
       case 'openIdConnect':
         handleWarning({
@@ -344,6 +347,8 @@ function getProcessedSecuritySchemes(
           data,
           log: preprocessingLog
         })
+
+        // TODO: Implement
         break
 
       case 'oauth2':
@@ -356,7 +361,7 @@ function getProcessedSecuritySchemes(
           log: preprocessingLog
         })
 
-        // Continue because we do not want to create an oauth viewer
+        // Continue because we do not want to create an OAuth viewer
         continue
 
       default:
@@ -927,13 +932,13 @@ function getSchemaName(
           : 'PlaceholderName'
       )
     )
-    let appendix = 2
+
     /**
      * GraphQL Objects cannot share the name so if the name already exists in
      * the master list append an incremental number until the name does not
      * exist anymore.
      */
-
+    let appendix = 2
     while (usedNames.includes(`${tempName}${appendix}`)) {
       appendix++
     }
@@ -1007,7 +1012,8 @@ function addObjectPropertiesToDataDef(
 }
 
 /**
- *
+ * Recursively traverse a schema and resolve allOf by appending the data to the
+ * parent schema
  */
 function collapseAllOf(
   schema: SchemaObject | ReferenceObject,
@@ -1017,7 +1023,7 @@ function collapseAllOf(
   // Dereference schema
   if ('$ref' in schema) {
     const referenceLocation = schema['$ref']
-    schema = Oas3Tools.resolveRef(schema['$ref'], oas) as SchemaObject // Return resolvee reference
+    schema = Oas3Tools.resolveRef(schema['$ref'], oas) as SchemaObject
 
     if (referenceLocation in references) {
       return references[referenceLocation]
@@ -1028,8 +1034,9 @@ function collapseAllOf(
   }
 
   // Added due to Typescript typing issues
-  const collapsedSchema: SchemaObject = schema // Resolve allOf
+  const collapsedSchema: SchemaObject = schema
 
+  // Resolve allOf
   if (Array.isArray(collapsedSchema.allOf)) {
     collapsedSchema.allOf.forEach(subSchema => {
       // Collapse type if applicable
@@ -1037,7 +1044,9 @@ function collapseAllOf(
 
       if (resolvedSchema.type) {
         if (!collapsedSchema.type) {
-          collapsedSchema.type = resolvedSchema.type // Add type if applicable
+          collapsedSchema.type = resolvedSchema.type
+
+          // Add type if applicable
         } else if (collapsedSchema.type !== resolvedSchema.type) {
           // TODO: throw error different types
         }
@@ -1081,21 +1090,22 @@ function collapseAllOf(
   return collapsedSchema
 }
 
-type ConsolidatedSchemaObject = {
+type MemberSchemaData = {
   allTargetGraphQLTypes: string[]
   allProperties: ({ [key: string]: SchemaObject | ReferenceObject })[]
   allRequired: string[]
 }
 
 /**
- *
+ * In the context of schemas that use keywords that combine member schemas,
+ * collect data on certain aspects so it is all in one place for processing.
  */
 function getMemberSchemaData(
   schemas: (SchemaObject | ReferenceObject)[],
   data: PreprocessingData,
   oas: Oas3
-): ConsolidatedSchemaObject {
-  const consolidated: ConsolidatedSchemaObject = {
+): MemberSchemaData {
+  const result: MemberSchemaData = {
     allTargetGraphQLTypes: [],
     allProperties: [],
     allRequired: []
@@ -1107,17 +1117,21 @@ function getMemberSchemaData(
       schema = Oas3Tools.resolveRef(schema['$ref'], oas) as SchemaObject
     }
 
-    // Handle allOf
+    /**
+     * Handle allOf
+     *
+     * NOTE: should be redundant because collapseAllOf() is called before
+     */
     if (Array.isArray(schema.allOf)) {
       const nestedConsolidated = getMemberSchemaData(schema.allOf, data, oas)
 
       // Consolidate properties
-      consolidated.allProperties = consolidated.allProperties.concat(
+      result.allProperties = result.allProperties.concat(
         nestedConsolidated.allProperties
       )
 
       // Consolidate required
-      consolidated.allRequired = consolidated.allRequired.concat(
+      result.allRequired = result.allRequired.concat(
         nestedConsolidated.allRequired
       )
     }
@@ -1128,21 +1142,19 @@ function getMemberSchemaData(
       data
     )
     if (memberTargetGraphQLType) {
-      consolidated.allTargetGraphQLTypes.push(memberTargetGraphQLType)
+      result.allTargetGraphQLTypes.push(memberTargetGraphQLType)
     }
 
     // Consolidate properties
     if (schema.properties) {
-      consolidated.allProperties.push(schema.properties)
+      result.allProperties.push(schema.properties)
     }
 
     // Consolidate required
     if (schema.required) {
-      consolidated.allRequired = consolidated.allRequired.concat(
-        schema.required
-      )
+      result.allRequired = result.allRequired.concat(schema.required)
     }
   })
 
-  return consolidated
+  return result
 }

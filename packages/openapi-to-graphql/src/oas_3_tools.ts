@@ -115,6 +115,14 @@ export async function getValidOAS3(spec: Oas2 | Oas3): Promise<Oas3> {
     }
 
     preprocessingLog(`OpenAPI Specification is validated`)
+
+    /**
+     * OtG current changes the OAS as part of the preprocessing step (resolving
+     * JSON schema combining keywords like allOf, oneOf, anyOf, and not)
+     *
+     * To prevent unintended changes to the OAS from passing on to the user,
+     * make a deep copy.
+     */
     return rfdc()(spec) as Oas3
   } else {
     throw new Error(`Invalid specification provided`)

@@ -78,7 +78,8 @@ function preprocessOas(oass, options) {
                 const { payloadContentType, payloadSchema, payloadSchemaNames, payloadRequired } = Oas3Tools.getRequestSchemaAndNames(path, method, oas);
                 const payloadDefinition = payloadSchema && typeof payloadSchema !== 'undefined'
                     ? createDataDef(payloadSchemaNames, payloadSchema, true, data, undefined, oas)
-                    : undefined; // Response schema
+                    : undefined;
+                // Response schema
                 const { responseContentType, responseSchema, responseSchemaNames, statusCode } = Oas3Tools.getResponseSchemaAndNames(path, method, oas, data, options);
                 if (!responseSchema || typeof responseSchema !== 'object') {
                     utils_1.handleWarning({
@@ -104,7 +105,8 @@ function preprocessOas(oass, options) {
                 const servers = Oas3Tools.getServers(path, method, oas);
                 // Whether to place this operation into an authentication viewer
                 const inViewer = securityRequirements.length > 0 && data.options.viewer !== false;
-                const isMutation = method.toLowerCase() !== 'get'; // Store determined information for operation
+                const isMutation = method.toLowerCase() !== 'get';
+                // Store determined information for operation
                 const operation = {
                     operationId,
                     operationString,
@@ -187,7 +189,8 @@ function getProcessedSecuritySchemes(oas, data) {
     // Loop through all the security protocols
     for (let key in security) {
         const protocol = security[key];
-        let schema; // Determine the parameters and the schema for the security protocol
+        // Determine the parameters and the schema for the security protocol
+        let schema;
         let parameters = {};
         let description;
         switch (protocol.type) {
@@ -245,7 +248,7 @@ function getProcessedSecuritySchemes(oas, data) {
                             log: preprocessingLog
                         });
                 }
-                break; // TODO: Implement
+                break;
             case 'openIdConnect':
                 utils_1.handleWarning({
                     typeKey: 'UNSUPPORTED_HTTP_SECURITY_SCHEME',
@@ -254,6 +257,7 @@ function getProcessedSecuritySchemes(oas, data) {
                     data,
                     log: preprocessingLog
                 });
+                // TODO: Implement
                 break;
             case 'oauth2':
                 utils_1.handleWarning({
@@ -263,7 +267,7 @@ function getProcessedSecuritySchemes(oas, data) {
                     data,
                     log: preprocessingLog
                 });
-                // Continue because we do not want to create an oauth viewer
+                // Continue because we do not want to create an OAuth viewer
                 continue;
             default:
                 utils_1.handleWarning({
@@ -695,12 +699,12 @@ function getSchemaName(usedNames, names) {
                 : typeof names.fromPath === 'string'
                     ? names.fromPath
                     : 'PlaceholderName'));
-        let appendix = 2;
         /**
          * GraphQL Objects cannot share the name so if the name already exists in
          * the master list append an incremental number until the name does not
          * exist anymore.
          */
+        let appendix = 2;
         while (usedNames.includes(`${tempName}${appendix}`)) {
             appendix++;
         }
@@ -751,13 +755,14 @@ function addObjectPropertiesToDataDef(def, schema, required, isInputObjectType, 
     }
 }
 /**
- *
+ * Recursively traverse a schema and resolve allOf by appending the data to the
+ * parent schema
  */
 function collapseAllOf(schema, references, oas) {
     // Dereference schema
     if ('$ref' in schema) {
         const referenceLocation = schema['$ref'];
-        schema = Oas3Tools.resolveRef(schema['$ref'], oas); // Return resolvee reference
+        schema = Oas3Tools.resolveRef(schema['$ref'], oas);
         if (referenceLocation in references) {
             return references[referenceLocation];
         }
@@ -767,14 +772,16 @@ function collapseAllOf(schema, references, oas) {
         }
     }
     // Added due to Typescript typing issues
-    const collapsedSchema = schema; // Resolve allOf
+    const collapsedSchema = schema;
+    // Resolve allOf
     if (Array.isArray(collapsedSchema.allOf)) {
         collapsedSchema.allOf.forEach(subSchema => {
             // Collapse type if applicable
             const resolvedSchema = collapseAllOf(subSchema, references, oas);
             if (resolvedSchema.type) {
                 if (!collapsedSchema.type) {
-                    collapsedSchema.type = resolvedSchema.type; // Add type if applicable
+                    collapsedSchema.type = resolvedSchema.type;
+                    // Add type if applicable
                 }
                 else if (collapsedSchema.type !== resolvedSchema.type) {
                     // TODO: throw error different types
@@ -812,10 +819,11 @@ function collapseAllOf(schema, references, oas) {
     return collapsedSchema;
 }
 /**
- *
+ * In the context of schemas that use keywords that combine member schemas,
+ * collect data on certain aspects so it is all in one place for processing.
  */
 function getMemberSchemaData(schemas, data, oas) {
-    const consolidated = {
+    const result = {
         allTargetGraphQLTypes: [],
         allProperties: [],
         allRequired: []
@@ -825,28 +833,32 @@ function getMemberSchemaData(schemas, data, oas) {
         if ('$ref' in schema) {
             schema = Oas3Tools.resolveRef(schema['$ref'], oas);
         }
-        // Handle allOf
+        /**
+         * Handle allOf
+         *
+         * NOTE: should be redundant because collapseAllOf() is called before
+         */
         if (Array.isArray(schema.allOf)) {
             const nestedConsolidated = getMemberSchemaData(schema.allOf, data, oas);
             // Consolidate properties
-            consolidated.allProperties = consolidated.allProperties.concat(nestedConsolidated.allProperties);
+            result.allProperties = result.allProperties.concat(nestedConsolidated.allProperties);
             // Consolidate required
-            consolidated.allRequired = consolidated.allRequired.concat(nestedConsolidated.allRequired);
+            result.allRequired = result.allRequired.concat(nestedConsolidated.allRequired);
         }
         // Consolidate target GraphQL type
         const memberTargetGraphQLType = Oas3Tools.getSchemaTargetGraphQLType(schema, data);
         if (memberTargetGraphQLType) {
-            consolidated.allTargetGraphQLTypes.push(memberTargetGraphQLType);
+            result.allTargetGraphQLTypes.push(memberTargetGraphQLType);
         }
         // Consolidate properties
         if (schema.properties) {
-            consolidated.allProperties.push(schema.properties);
+            result.allProperties.push(schema.properties);
         }
         // Consolidate required
         if (schema.required) {
-            consolidated.allRequired = consolidated.allRequired.concat(schema.required);
+            result.allRequired = result.allRequired.concat(schema.required);
         }
     });
-    return consolidated;
+    return result;
 }
 //# sourceMappingURL=preprocessor.js.map
