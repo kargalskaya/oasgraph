@@ -14,10 +14,10 @@ export declare const mitigations: {
     UNSUPPORTED_HTTP_SECURITY_SCHEME: string;
     NON_APPLICATION_JSON_SCHEMA: string;
     OBJECT_MISSING_PROPERTIES: string;
-    UNION_MEMBER_NON_OBJECT: string;
     AMBIGUOUS_UNION_MEMBERS: string;
     CANNOT_GET_FIELD_TYPE: string;
     COMBINE_SCHEMAS: string;
+    UNKNOWN_TARGET_TYPE: string;
     UNRESOLVABLE_LINK: string;
     AMBIGUOUS_LINK: string;
     LINK_NAME_COLLISION: string;

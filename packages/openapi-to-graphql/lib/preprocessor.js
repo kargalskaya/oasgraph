@@ -393,9 +393,14 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
             ? consolidateSubSchemas(consolidatedSchema.oneOf, oas, data, 0)
             : null;
         // oneOf will ideally be turned into a union type
-        if (oneOfConsolidated) {
+        if (oneOfConsolidated &&
+            oneOfConsolidated.consolidatedTargetGraphQLTypes.some(
+            // Some because not all member schemas have a type, could just be a required field, for example
+            memberTargetGraphQLTypes => {
+                return memberTargetGraphQLTypes === 'object';
+            })) {
             // unions must be created from object types
-            if (oneOfConsolidated.consolidatedTargetGraphQLTypes.some(// Some because not all member schemas have a type, could just be a required field, for example
+            if (oneOfConsolidated.consolidatedTargetGraphQLTypes.every(
             // Some because not all member schemas have a type, could just be a required field, for example
             memberTargetGraphQLTypes => {
                 return memberTargetGraphQLTypes === 'object';
@@ -426,17 +431,16 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
                         else {
                             // TODO: mitigation default JSON type
                             utils_1.handleWarning({
-                                typeKey: 'UNION_MEMBER_NON_OBJECT',
-                                message: `Union member type '${JSON.stringify(subSchema)}' in ` +
-                                    `union type '${JSON.stringify(consolidatedSchema)}' is not an object ` +
-                                    `type. Union member types must be object base types.`,
+                                typeKey: 'COMBINE_SCHEMAS',
+                                message: `Schema '${JSON.stringify(schema)}' contains 'oneOf' so ` +
+                                    `create a GraphQL union type schema '${JSON.stringify(subSchema)}' ` +
+                                    `is not an object type and union member types must be ` +
+                                    `object base types.`,
                                 data,
                                 log: preprocessingLog
                             });
                         }
                     });
-                    // Add the def to the master list
-                    data.defs.push(def);
                     def.targetGraphQLType = 'union';
                     return def;
                 }
@@ -445,14 +449,12 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
                     utils_1.handleWarning({
                         typeKey: 'COMBINE_SCHEMAS',
                         message: `Schema '${JSON.stringify(schema)}' contains 'oneOf' so create ` +
-                            `a GraphQL union type but the parent object is a non-object ` +
+                            `a GraphQL union type but the parent schema is a non-object ` +
                             `type and member types must be object types.`,
                         mitigationAddendum: `The schema will be made into an arbitrary JSON type.`,
                         data,
                         log: preprocessingLog
                     });
-                    // Add the def to the master list
-                    data.defs.push(def);
                     def.targetGraphQLType = 'json';
                     return def;
                 }
@@ -463,13 +465,11 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
                     typeKey: 'COMBINE_SCHEMAS',
                     message: `Schema '${JSON.stringify(schema)}' contains 'oneOf' so create ` +
                         `a GraphQL union type but some member schemas are non-object ` +
-                        `type and union member types must be object types.`,
+                        `types and union member types must be object types.`,
                     mitigationAddendum: `The schema will be made into an arbitrary JSON type.`,
                     data,
                     log: preprocessingLog
                 });
-                // Add the def to the master list
-                data.defs.push(def);
                 def.targetGraphQLType = 'json';
                 return def;
             }
@@ -479,44 +479,77 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
          *
          * Fields common to all member schemas will be made non-null
          */
-        if (anyOfConsolidated) {
+        if (anyOfConsolidated &&
+            anyOfConsolidated.consolidatedTargetGraphQLTypes.some(memberTargetGraphQLTypes => {
+                return memberTargetGraphQLTypes === 'object';
+            })) {
             // Every member type should be an object
-            if (anyOfConsolidated.consolidatedTargetGraphQLTypes.length > 0 &&
-                anyOfConsolidated.consolidatedTargetGraphQLTypes.every((memberTargetGraphQLTypes) => {
-                    return memberTargetGraphQLTypes === 'object';
-                }) &&
+            if (anyOfConsolidated.consolidatedTargetGraphQLTypes.every(memberTargetGraphQLTypes => {
+                return memberTargetGraphQLTypes === 'object';
+            }) &&
                 // Redundant check
                 anyOfConsolidated.consolidatedProperties.length > 0) {
-                const incompatibleProperties = new Set();
-                anyOfConsolidated.consolidatedProperties.forEach((properties) => {
-                    Object.keys(properties).forEach((propertyName) => {
-                        if (!incompatibleProperties.has(propertyName) &&
-                            //  No preexisting conflicts
-                            propertyName in consolidatedSchema &&
-                            //  Property already exists in the consolidated schema
-                            !deepEqual(properties[propertyName], consolidatedSchema[propertyName])
-                        //  Property conflicts with that in the consolidated schema
-                        ) {
-                            incompatibleProperties.add(propertyName);
-                            consolidatedSchema[propertyName] = undefined;
-                            //  Do not create these properties. Will add them in later.
-                        }
+                // Ensure that parent schema is compatiable with oneOf
+                if (targetGraphQLType === null || targetGraphQLType === 'object') {
+                    const allProperties = {};
+                    const incompatibleProperties = new Set();
+                    Object.keys(consolidatedSchema.properties).forEach(propertyName => {
+                        allProperties[propertyName] = [consolidatedSchema.properties[propertyName]];
                     });
-                });
-                def.subDefinitions = {};
-                addObjectPropertiesToDataDef(def, consolidatedSchema, def.required, isInputObjectType, data, oas);
-                //  Add in incompatible properties
-                incompatibleProperties.forEach((propertyName) => {
-                    //  TODO: incompatible property
-                    //  TODO: add description
-                    def.subDefinitions[propertyName] = {
-                        targetGraphQLType: 'json'
-                    };
-                });
-                return def;
+                    // Check if any member schema has conflicting properties
+                    anyOfConsolidated.consolidatedProperties.forEach(properties => {
+                        Object.keys(properties).forEach(propertyName => {
+                            if (!incompatibleProperties.has(propertyName) && // Has not been already identified as a problematic property
+                                propertyName in allProperties &&
+                                allProperties[propertyName].some((property) => {
+                                    return !deepEqual(property, properties[propertyName]);
+                                })) {
+                                incompatibleProperties.add(propertyName);
+                            }
+                            // Add property in the store
+                            if (!(propertyName in allProperties)) {
+                                allProperties[propertyName] = [];
+                            }
+                            allProperties[propertyName].push(properties[propertyName]);
+                        });
+                    });
+                    def.subDefinitions = {};
+                    addObjectPropertiesToDataDef(def, consolidatedSchema, def.required, isInputObjectType, data, oas);
+                    //  Add in incompatible properties
+                    incompatibleProperties.forEach(propertyName => {
+                        //  TODO: add description
+                        def.subDefinitions[propertyName] = {
+                            targetGraphQLType: 'json'
+                        };
+                    });
+                    return def;
+                }
+                else {
+                    // The parent schema is incompatible with the member schemas
+                    utils_1.handleWarning({
+                        typeKey: 'COMBINE_SCHEMAS',
+                        message: `Schema '${JSON.stringify(schema)}' contains 'anyOf' and ` +
+                            `some member schemas are object types so create a GraphQL ` +
+                            `object type but the parent schema is a non-object type ` +
+                            `so they are not compatible.`,
+                        mitigationAddendum: `The schema will be made into an arbitrary JSON type.`,
+                        data,
+                        log: preprocessingLog
+                    });
+                    def.targetGraphQLType = 'json';
+                    return def;
+                }
             }
             else {
-                //  TODO: warning different types
+                utils_1.handleWarning({
+                    typeKey: 'COMBINE_SCHEMAS',
+                    message: `Schema '${JSON.stringify(schema)}' contains 'anyOf' and ` +
+                        `some member schemas are object types so create a GraphQL ` +
+                        `object type but some member schemas are non-object types ` +
+                        `so they are not compatible.`,
+                    data,
+                    log: preprocessingLog
+                });
                 def.targetGraphQLType = 'json';
                 return def;
             }
@@ -546,7 +579,12 @@ function createDataDef(names, schema, isInputObjectType, data, links, oas) {
             }
         }
         else {
-            // TODO: throw error
+            utils_1.handleWarning({
+                typeKey: 'UNKNOWN_TARGET_TYPE',
+                message: `No GraphQL target type could be identified for schema '${JSON.stringify(schema)}'.`,
+                data,
+                log: preprocessingLog
+            });
             def.targetGraphQLType = 'json';
         }
         return def;
