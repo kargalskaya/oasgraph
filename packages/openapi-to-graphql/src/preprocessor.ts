@@ -71,7 +71,7 @@ export function preprocessOas(
     // Process all operations
     for (let path in oas.paths) {
       for (let method in oas.paths[path]) {
-        //  Only consider Operation Objects
+        // Only consider Operation Objects
         if (!Oas3Tools.isOperation(method)) {
           continue
         }
@@ -894,8 +894,9 @@ function getSchemaName(
     )
   }
 
-  let schemaName // CASE: name from reference
+  let schemaName
 
+  // CASE: name from reference
   if (typeof names.fromRef === 'string') {
     const saneName = Oas3Tools.capitalize(Oas3Tools.sanitize(names.fromRef))
     if (!usedNames.includes(saneName)) {
