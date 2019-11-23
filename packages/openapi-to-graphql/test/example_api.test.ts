@@ -44,6 +44,7 @@ afterAll(() => {
 })
 
 test('Get descriptions', () => {
+  // Get all the descriptions of the fields on the GraphQL object type Car
   const query = `{
     __type(name: "Car") {
       name
@@ -84,6 +85,7 @@ test('Get descriptions', () => {
 })
 
 test('Get resource (incl. enum)', () => {
+  // Status is an enum
   const query = `{
     user (username: "arlene") {
       name
@@ -108,6 +110,7 @@ test('Get resource 2', () => {
   })
 })
 
+// OAS allows you to define response objects with HTTP code with the XX wildcard syntax
 test('Get resource with status code: 2XX', () => {
   const query = `{
     papers {
@@ -131,6 +134,10 @@ test('Get resource with status code: 2XX', () => {
   })
 })
 
+/**
+ * Some operations do not have a response body. The option fillEmptyResponses
+ * allows OtG to handle these cases.
+ */
 test('Get resource with no response schema and status code: 204 and fillEmptyResponses', () => {
   const query = `{
     bonuses
@@ -144,6 +151,7 @@ test('Get resource with no response schema and status code: 204 and fillEmptyRes
   })
 })
 
+// Link objects in the OAS allow OtG to create nested GraphQL objects that resolve on different API calls
 test('Get nested resource via link $response.body#/...', () => {
   const query = `{
     user (username: "arlene") {
@@ -188,6 +196,7 @@ test('Get nested resource via link $request.path#/... and $request.query#/', () 
   })
 })
 
+// Both an operationId and an operationRef can be used to create a link object
 test('Get nested resource via link operationRef', () => {
   const query = `{
     productWithId (productId: "123" productTag: "blah") {
@@ -381,6 +390,7 @@ test('Get nested lists of resources', () => {
   })
 })
 
+// Links can be defined with some parameters as constants or variables
 test('Link parameters as constants and variables', () => {
   const query = `{
     scanner(query: "hello") {
@@ -549,8 +559,10 @@ test('Get response with header parameters', () => {
   })
 })
 
-// Content-type and accept headers should not change because they are linked
-// to GraphQL object types with static schemas
+/**
+ * Content-type and accept headers should not change because they are
+ * linked to GraphQL object types with static schemas
+ */
 test('Get JSON response even with non-JSON accept header', () => {
   const query = `{
     office (id: 2) {
@@ -584,6 +596,10 @@ test('Get response with cookies', () => {
   })
 })
 
+/**
+ * GraphQL (input) object type also consider the preferred name when generating
+ * a name
+ */
 test('Ensure good naming for operations with duplicated schemas', () => {
   const query = `query {
     cleanDesks
@@ -599,7 +615,11 @@ test('Ensure good naming for operations with duplicated schemas', () => {
   })
 })
 
-test('Get response containing 64 bit integer (using GraphQLFloat)', () => {
+/**
+ * CASE: 64 bit int - return number instead of integer, leading to use of
+ * GraphQLFloat, which can support 64 bits:
+ */
+test('Get response containing 64-bit integer (using GraphQLFloat)', () => {
   const query = `{
     productsReviews (id: "100") {
       timestamp
@@ -750,7 +770,9 @@ test('Post resource and get nested resource back', () => {
 })
 
 test('Post resource with non-application/json content-type request and response bodies', () => {
-  const query = `mutation{postPaper(textPlainInput: "happy")}`
+  const query = `mutation {
+    postPaper(textPlainInput: "happy")
+  }`
   return graphql(createdSchema, query).then(result => {
     expect(result).toEqual({
       data: {
@@ -766,7 +788,7 @@ test(
     'received data is correctly sanitized',
   () => {
     const query = `{
-    productWithId (productId: "this-path", productTag:"And a tag") {
+    productWithId (productId: "this-path", productTag: "And a tag") {
       productId
       productTag
     }
@@ -1033,8 +1055,7 @@ test('Resolve circular allOf', () => {
         }
       }
     }
-  }
-  `
+  }`
   return graphql(createdSchema, query, null, {}).then(result => {
     expect(
       result.data['__type']['fields'].find(field => {
@@ -1049,6 +1070,7 @@ test('Resolve circular allOf', () => {
   })
 })
 
+// Extensions provide more information about failed API calls
 test('Error contains extension', () => {
   const query = `query {
     user(username: "abcdef") {
@@ -1066,7 +1088,7 @@ test('Error contains extension', () => {
       path: '/users/{username}',
       statusCode: 404,
       responseBody: {
-        message: 'Wrong username.'
+        message: 'Wrong username'
       }
     })
   })

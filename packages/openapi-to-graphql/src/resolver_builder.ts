@@ -319,7 +319,8 @@ export function getResolver({
       `Call ${options.method.toUpperCase()} ${
         options.url
       }?${querystring.stringify(options.qs)}\n` +
-        `headers:${JSON.stringify(options.headers)}`
+        `headers: ${JSON.stringify(options.headers)}\n` +
+        `request body: ${options.body}`
     )
 
     return new Promise((resolve, reject) => {
