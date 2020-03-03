@@ -37,7 +37,7 @@ import { Oas2 } from './types/oas2'
 import { Args, Field, GraphQLType } from './types/graphql'
 import { Operation } from './types/operation'
 import { PreprocessingData } from './types/preprocessing_data'
-import { GraphQLSchema, GraphQLObjectType } from 'graphql'
+import { GraphQLSchema, GraphQLObjectType, printSchema } from 'graphql'
 import * as NodeRequest from 'request'
 
 // Imports:
@@ -50,10 +50,12 @@ import { createAndLoadViewer } from './auth_builder'
 import debug from 'debug'
 import { GraphQLSchemaConfig } from 'graphql/type/schema'
 import { sortObject, handleWarning } from './utils'
+import { constants } from 'os'
 
 type Result = {
-  schema: GraphQLSchema
+  schema: GraphQLSchema | string
   report: Report
+  resolvers?: any
 }
 
 const translationLog = debug('translation')
@@ -71,6 +73,11 @@ export async function createGraphQlSchema(
 
   // Setting default options
   options.strict = typeof options.strict === 'boolean' ? options.strict : false
+
+  options.splitTypeDefsAndResolvers =
+    typeof options.splitTypeDefsAndResolvers === 'boolean'
+      ? options.splitTypeDefsAndResolvers
+      : false
 
   // Schema options
   options.operationIdFieldNames =
@@ -132,12 +139,13 @@ export async function createGraphQlSchema(
     oass = [await Oas3Tools.getValidOAS3(spec)]
   }
 
-  const { schema, report } = await translateOpenApiToGraphQL(
+  const { schema, resolvers, report } = await translateOpenApiToGraphQL(
     oass,
     options as InternalOptions
   )
   return {
     schema,
+    resolvers,
     report
   }
 }
@@ -163,6 +171,7 @@ async function translateOpenApiToGraphQL(
     requestOptions,
     baseUrl,
     customResolvers,
+    splitTypeDefsAndResolvers,
 
     // Authentication options
     viewer,
@@ -173,7 +182,7 @@ async function translateOpenApiToGraphQL(
     provideErrorExtensions,
     equivalentToMessages
   }: InternalOptions
-): Promise<{ schema: GraphQLSchema; report: Report }> {
+): Promise<Result> {
   const options = {
     strict,
     report,
@@ -190,6 +199,7 @@ async function translateOpenApiToGraphQL(
     requestOptions,
     baseUrl,
     customResolvers,
+    splitTypeDefsAndResolvers,
 
     // Authentication options
     viewer,
@@ -432,6 +442,26 @@ async function translateOpenApiToGraphQL(
   })
 
   const schema = new GraphQLSchema(schemaConfig)
+
+  if (splitTypeDefsAndResolvers) {
+    const Query = {}
+    const Mutation = {}
+    for (let key in queryFields) {
+      Query[key] = queryFields[key]['resolve']
+    }
+    for (let key in mutationFields) {
+      Mutation[key] = mutationFields[key]['resolve']
+    }
+    const resolvers = {
+      Query,
+      Mutation
+    }
+    return {
+      schema,
+      resolvers,
+      report: options.report
+    }
+  }
 
   return { schema, report: options.report }
 }

@@ -4,7 +4,6 @@
 // License text available at https://opensource.org/licenses/MIT
 
 'use strict'
-
 const express = require('express')
 const graphqlHTTP = require('express-graphql')
 const app = express()
@@ -26,18 +25,19 @@ const oas3 = require('./fixtures/example_oas3.json')
 
 openapiToGraphql
   .createGraphQlSchema(oas, {
-    idFormats: ['specialIdFormat']
+    idFormats: ['specialIdFormat'],
+    splitTypeDefsAndResolvers: true
   })
-  .then(({ schema, report }) => {
-    console.log(JSON.stringify(report, null, 2))
+  .then(response => {
+    // console.log(JSON.stringify(report, null, 2))
     app.use(
       '/graphql',
       graphqlHTTP({
-        schema: schema,
+        schema: response.schema,
         graphiql: true
       })
     )
-
+    console.log(response.resolvers)
     app.listen(3000, () => {
       console.log('GraphQL accessible at: http://localhost:3000/graphql')
     })

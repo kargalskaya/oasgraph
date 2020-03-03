@@ -104,6 +104,10 @@ export declare type Options = {
         };
     };
     /**
+     * Returns result as schema on SDL an resolvers
+     */
+    splitTypeDefsAndResolvers?: boolean;
+    /**
      * Determines whether OpenAPI-to-GraphQL should create viewers that allow users to pass
      * basic auth and API key credentials.
      */
@@ -229,6 +233,7 @@ export declare type InternalOptions = {
             };
         };
     };
+    splitTypeDefsAndResolvers?: boolean;
     /**
      * Determines whether OpenAPI-to-GraphQL should create viewers that allow users to pass
      * basic auth and API key credentials.

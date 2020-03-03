@@ -34,6 +34,7 @@ function createGraphQlSchema(spec, options) {
         }
         // Setting default options
         options.strict = typeof options.strict === 'boolean' ? options.strict : false;
+        options.splitTypeDefsAndResolvers = typeof options.splitTypeDefsAndResolvers === 'boolean' ? options.splitTypeDefsAndResolvers : false;
         // Schema options
         options.operationIdFieldNames =
             typeof options.operationIdFieldNames === 'boolean'
@@ -87,9 +88,10 @@ function createGraphQlSchema(spec, options) {
              */
             oass = [yield Oas3Tools.getValidOAS3(spec)];
         }
-        const { schema, report } = yield translateOpenApiToGraphQL(oass, options);
+        const { schema, resolvers, report } = yield translateOpenApiToGraphQL(oass, options);
         return {
             schema,
+            resolvers,
             report
         };
     });
@@ -102,7 +104,7 @@ function translateOpenApiToGraphQL(oass, { strict, report,
 // Schema options
 operationIdFieldNames, fillEmptyResponses, addLimitArgument, idFormats, 
 // Resolver options
-headers, qs, requestOptions, baseUrl, customResolvers, 
+headers, qs, requestOptions, baseUrl, customResolvers, splitTypeDefsAndResolvers, 
 // Authentication options
 viewer, tokenJSONpath, sendOAuthTokenInQuery, 
 // Logging options
@@ -122,6 +124,7 @@ provideErrorExtensions, equivalentToMessages }) {
             requestOptions,
             baseUrl,
             customResolvers,
+            splitTypeDefsAndResolvers,
             // Authentication options
             viewer,
             tokenJSONpath,
@@ -325,6 +328,25 @@ provideErrorExtensions, equivalentToMessages }) {
             }
         });
         const schema = new graphql_1.GraphQLSchema(schemaConfig);
+        if (splitTypeDefsAndResolvers) {
+            const Query = {};
+            const Mutation = {};
+            for (let key in queryFields) {
+                Query[key] = queryFields[key]['resolve'];
+            }
+            for (let key in mutationFields) {
+                Mutation[key] = mutationFields[key]['resolve'];
+            }
+            const resolvers = {
+                Query,
+                Mutation
+            };
+            return {
+                schema,
+                resolvers,
+                report: options.report
+            };
+        }
         return { schema, report: options.report };
     });
 }
