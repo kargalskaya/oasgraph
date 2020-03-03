@@ -52,8 +52,9 @@ import { GraphQLSchemaConfig } from 'graphql/type/schema'
 import { sortObject, handleWarning } from './utils'
 
 type Result = {
-  schema: GraphQLSchema
+  schema: GraphQLSchema | string
   report: Report
+  resolvers?: any
 }
 
 const translationLog = debug('translation')
@@ -71,6 +72,11 @@ export async function createGraphQLSchema(
 
   // Setting default options
   options.strict = typeof options.strict === 'boolean' ? options.strict : false
+
+  options.splitTypeDefsAndResolvers =
+    typeof options.splitTypeDefsAndResolvers === 'boolean'
+      ? options.splitTypeDefsAndResolvers
+      : false
 
   // Schema options
   options.operationIdFieldNames =
@@ -140,12 +146,13 @@ export async function createGraphQLSchema(
     oass = [await Oas3Tools.getValidOAS3(spec)]
   }
 
-  const { schema, report } = await translateOpenAPIToGraphQL(
+  const { schema, resolvers, report } = await translateOpenAPIToGraphQL(
     oass,
     options as InternalOptions
   )
   return {
     schema,
+    resolvers,
     report
   }
 }
@@ -175,6 +182,7 @@ async function translateOpenAPIToGraphQL(
     requestOptions,
     baseUrl,
     customResolvers,
+    splitTypeDefsAndResolvers,
 
     // Authentication options
     viewer,
@@ -185,7 +193,7 @@ async function translateOpenAPIToGraphQL(
     provideErrorExtensions,
     equivalentToMessages
   }: InternalOptions
-): Promise<{ schema: GraphQLSchema; report: Report }> {
+): Promise<Result> {
   const options = {
     strict,
     report,
@@ -206,6 +214,7 @@ async function translateOpenAPIToGraphQL(
     requestOptions,
     baseUrl,
     customResolvers,
+    splitTypeDefsAndResolvers,
 
     // Authentication options
     viewer,
@@ -475,6 +484,26 @@ async function translateOpenAPIToGraphQL(
   })
 
   const schema = new GraphQLSchema(schemaConfig)
+
+  if (splitTypeDefsAndResolvers) {
+    const Query = {}
+    const Mutation = {}
+    for (let key in queryFields) {
+      Query[key] = queryFields[key]['resolve']
+    }
+    for (let key in mutationFields) {
+      Mutation[key] = mutationFields[key]['resolve']
+    }
+    const resolvers = {
+      Query,
+      Mutation
+    }
+    return {
+      schema,
+      resolvers,
+      report: options.report
+    }
+  }
 
   return { schema, report: options.report }
 }

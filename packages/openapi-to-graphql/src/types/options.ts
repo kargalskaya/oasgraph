@@ -161,6 +161,11 @@ export type Options = {
     [title: string]: { [path: string]: { [method: string]: ResolveFunction } }
   }
 
+  /**
+   * Returns result as schema on SDL an resolvers
+   */
+  splitTypeDefsAndResolvers?: boolean
+
   // Authentication options
 
   /**
@@ -345,6 +350,8 @@ export type InternalOptions = {
   customResolvers?: {
     [title: string]: { [path: string]: { [method: string]: ResolveFunction } }
   }
+
+  splitTypeDefsAndResolvers?: boolean
 
   // Authentication options
 

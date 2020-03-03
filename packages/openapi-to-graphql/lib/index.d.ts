@@ -29,8 +29,9 @@ import { Oas3 } from './types/oas3';
 import { Oas2 } from './types/oas2';
 import { GraphQLSchema } from 'graphql';
 declare type Result = {
-    schema: GraphQLSchema;
+    schema: GraphQLSchema | string;
     report: Report;
+    resolvers?: any;
 };
 /**
  * Creates a GraphQL interface from the given OpenAPI Specification (2 or 3).
